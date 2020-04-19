@@ -27,6 +27,11 @@ impl CubicVector {
     pub fn z(&self) -> isize {
         self.z
     }
+
+    pub fn distance(self, other: Self) -> isize {
+        let vector = self - other;
+        (isize::abs(vector.x) + isize::abs(vector.y) + isize::abs(vector.z)) / 2
+    }
 }
 
 impl From<AxialVector> for CubicVector {
@@ -103,4 +108,12 @@ fn test_cubic_vector_subtraction() {
         CubicVector::new(1, 2, -3) - CubicVector::new(-10, -20, 30),
         CubicVector::new(11, 22, -33)
     );
+}
+
+#[test]
+fn test_cubic_vector_distance() {
+    let a = CubicVector::new(1, 2, -3);
+    let b = CubicVector::new(-2, -3, 5);
+    assert_eq!(a.distance(b), 8);
+    assert_eq!(b.distance(a), 8);
 }

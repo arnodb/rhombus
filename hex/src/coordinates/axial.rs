@@ -1,3 +1,5 @@
+use crate::coordinates::cubic::CubicVector;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct AxialVector {
     q: isize,
@@ -15,6 +17,10 @@ impl AxialVector {
 
     pub fn r(&self) -> isize {
         self.r
+    }
+
+    pub fn distance(self, other: Self) -> isize {
+        CubicVector::from(self).distance(CubicVector::from(other))
     }
 }
 
@@ -47,4 +53,12 @@ fn test_axial_vector_subtraction() {
         AxialVector::new(1, -3) - AxialVector::new(-10, 30),
         AxialVector::new(11, -33)
     );
+}
+
+#[test]
+fn test_axial_vector_distance() {
+    let a = AxialVector::new(1, -3);
+    let b = AxialVector::new(-2, 5);
+    assert_eq!(a.distance(b), 8);
+    assert_eq!(b.distance(a), 8);
 }
