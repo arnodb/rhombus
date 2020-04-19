@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct AxialVector {
     q: isize,
     r: isize,
@@ -31,4 +31,20 @@ fn test_axial_vector_q() {
 #[test]
 fn test_axial_vector_r() {
     assert_eq!(AxialVector::new(1, -3).r(), -3);
+}
+
+#[test]
+fn test_axial_vector_addition() {
+    assert_eq!(
+        AxialVector::new(1, -3) + AxialVector::new(-10, 30),
+        AxialVector::new(-9, 27)
+    );
+}
+
+#[test]
+fn test_axial_vector_subtraction() {
+    assert_eq!(
+        AxialVector::new(1, -3) - AxialVector::new(-10, 30),
+        AxialVector::new(11, -33)
+    );
 }

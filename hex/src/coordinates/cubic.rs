@@ -1,7 +1,7 @@
 use crate::coordinates::axial::AxialVector;
 use derive_more::Add;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct CubicVector {
     x: isize,
     y: isize,
@@ -86,5 +86,21 @@ fn test_cubic_to_axial_vector() {
     assert_eq!(
         AxialVector::from(CubicVector::new(1, 2, -3)),
         AxialVector::new(1, -3)
+    );
+}
+
+#[test]
+fn test_cubic_vector_addition() {
+    assert_eq!(
+        CubicVector::new(1, 2, -3) + CubicVector::new(-10, -20, 30),
+        CubicVector::new(-9, -18, 27)
+    );
+}
+
+#[test]
+fn test_cubic_vector_subtraction() {
+    assert_eq!(
+        CubicVector::new(1, 2, -3) - CubicVector::new(-10, -20, 30),
+        CubicVector::new(11, 22, -33)
     );
 }
