@@ -1,0 +1,13 @@
+[package]
+name = "rhombus_viewer"
+version = "0.1.0"
+authors = ["Arnaud de Bossoreille <arnaud.debossoreille@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rhombus_hex = { path = "../hex"}
+piston_window = "0.107"
+pistoncore-glutin_window = "0.63"
+
+[build-dependencies]
+gl_generator = "0.14"
