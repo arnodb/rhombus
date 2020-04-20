@@ -1,5 +1,6 @@
 use crate::coordinates::axial::AxialVector;
 use derive_more::Add;
+use std::ops::Mul;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct CubicVector {
@@ -40,6 +41,27 @@ impl CubicVector {
         let vector = self - other;
         (isize::abs(vector.x) + isize::abs(vector.y) + isize::abs(vector.z)) / 2
     }
+
+    pub fn ring_iter(&self, radius: usize) -> RingIter {
+        RingIter {
+            next: Some(Self::direction(4) * radius as isize),
+            direction: 0,
+            edge_index: 0,
+            radius,
+        }
+    }
+}
+
+impl Mul<isize> for CubicVector {
+    type Output = Self;
+
+    fn mul(self, rhs: isize) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+        }
+    }
 }
 
 impl From<AxialVector> for CubicVector {
@@ -67,6 +89,62 @@ const DIRECTIONS: [CubicVector; 6] = [
     CubicVector { x: -1, y: 0, z: 1 },
     CubicVector { x: 0, y: -1, z: 1 },
 ];
+
+pub struct RingIter {
+    next: Option<CubicVector>,
+    direction: usize,
+    edge_index: usize,
+    radius: usize,
+}
+
+impl RingIter {
+    pub fn peek(&mut self) -> Option<&CubicVector> {
+        self.next.as_ref()
+    }
+}
+
+impl Iterator for RingIter {
+    type Item = CubicVector;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.next {
+            if self.radius == 0 {
+                self.next = None;
+                return Some(current);
+            }
+            let direction = self.direction;
+            let edge_index = self.edge_index;
+            self.next = if direction < 6 {
+                if edge_index + 1 >= self.radius {
+                    self.edge_index = 0;
+                    self.direction = direction + 1;
+                    if direction + 1 < 6 {
+                        Some(current.neighbor(direction))
+                    } else {
+                        None
+                    }
+                } else {
+                    self.edge_index = edge_index + 1;
+                    Some(current.neighbor(direction))
+                }
+            } else {
+                None
+            };
+            Some(current)
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let radius = self.radius;
+        if radius > 0 {
+            (radius * 6, Some(radius * 6))
+        } else {
+            (1, Some(1))
+        }
+    }
+}
 
 #[test]
 fn test_new_cubic_vector() {
@@ -168,5 +246,52 @@ fn test_neighbor() {
     assert_eq!(
         CubicVector::new(-1, 0, 1).neighbor(0),
         CubicVector::new(0, -1, 1)
+    );
+}
+
+#[test]
+fn test_ring_iter0() {
+    let iter = CubicVector::new(0, 0, 0).ring_iter(0);
+    assert_eq!(iter.size_hint(), (1, Some(1)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![CubicVector::new(0, 0, 0)]);
+}
+
+#[test]
+fn test_ring_iter1() {
+    let iter = CubicVector::new(0, 0, 0).ring_iter(1);
+    assert_eq!(iter.size_hint(), (6, Some(6)));
+    assert_eq!(
+        iter.collect::<Vec<_>>(),
+        vec![
+            CubicVector::new(-1, 0, 1),
+            CubicVector::new(0, -1, 1),
+            CubicVector::new(1, -1, 0),
+            CubicVector::new(1, 0, -1),
+            CubicVector::new(0, 1, -1),
+            CubicVector::new(-1, 1, 0),
+        ]
+    );
+}
+
+#[test]
+fn test_ring_iter2() {
+    let iter = CubicVector::new(0, 0, 0).ring_iter(2);
+    assert_eq!(iter.size_hint(), (12, Some(12)));
+    assert_eq!(
+        iter.collect::<Vec<_>>(),
+        vec![
+            CubicVector::new(-2, 0, 2),
+            CubicVector::new(-1, -1, 2),
+            CubicVector::new(0, -2, 2),
+            CubicVector::new(1, -2, 1),
+            CubicVector::new(2, -2, 0),
+            CubicVector::new(2, -1, -1),
+            CubicVector::new(2, 0, -2),
+            CubicVector::new(1, 1, -2),
+            CubicVector::new(0, 2, -2),
+            CubicVector::new(-1, 2, -1),
+            CubicVector::new(-2, 2, 0),
+            CubicVector::new(-2, 1, 1),
+        ]
     );
 }
