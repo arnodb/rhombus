@@ -31,8 +31,8 @@ impl HexApp {
         };
         Self {
             position,
-            full_rings: vec![1, 3],
-            moving_rings: vec![new_ring(2), new_ring(4)],
+            full_rings: vec![2],
+            moving_rings: vec![new_ring(1), new_ring(3)],
         }
     }
 
@@ -77,6 +77,7 @@ impl HexApp {
     fn draw(&self) {
         let position = self.position;
         //Self::draw_hex(position);
+        Self::draw_dodeca(position);
         for radius in &self.full_rings {
             for hex in position.ring_iter(*radius) {
                 Self::draw_hex(hex);
@@ -103,7 +104,7 @@ impl HexApp {
                 0.0,
             );
 
-            gl::Begin(gl::GL_LINE_STRIP);
+            gl::Begin(gl::GL_LINE_LOOP);
             gl::Color3f(1.0, 1.0, 1.0);
             gl::Vertex3f(0.0, big, 0.0);
             gl::Vertex3f(small, big / 2.0, 0.0);
@@ -111,7 +112,88 @@ impl HexApp {
             gl::Vertex3f(0.0, -big, 0.0);
             gl::Vertex3f(-small, -big / 2.0, 0.0);
             gl::Vertex3f(-small, big / 2.0, 0.0);
-            gl::Vertex3f(0.0, big, 0.0);
+            gl::End();
+
+            gl::PopMatrix();
+        }
+    }
+
+    fn draw_dodeca(position: CubicVector) {
+        let col = position.x() + (position.z() - (position.z() & 1)) / 2;
+        let row = position.z();
+
+        let big = HEX_INTERIOR_RADIUS;
+        let small = HEX_INTERIOR_RADIUS * f32::sqrt(3.0) / 2.0;
+        let small2 = HEX_INTERIOR_RADIUS / (2.0 * f32::sqrt(2.0));
+        // Fun fact: those two values are analytically identical.
+        //let big2 = small2 + HEX_INTERIOR_RADIUS / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
+        let big2 = (small2 + big) / 2.0;
+
+        unsafe {
+            gl::PushMatrix();
+
+            gl::Translatef(
+                -HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (position.z() & 1) as f32 / 2.0),
+                HEX_RADIUS * row as f32 * 1.5,
+                0.0,
+            );
+
+            let p_a = (0.0, 0.0, big);
+
+            let p_b = (0.0, big, small2);
+            let p_c = (-small, big / 2.0, big2);
+            let p_d = (-small, -big / 2.0, small2);
+            let p_e = (0.0, -big, big2);
+            let p_f = (small, -big / 2.0, small2);
+            let p_g = (small, big / 2.0, big2);
+
+            let p_h = (0.0, big, -big2);
+            let p_i = (-small, big / 2.0, -small2);
+            let p_j = (-small, -big / 2.0, -big2);
+            let p_k = (0.0, -big, -small2);
+            let p_l = (small, -big / 2.0, -big2);
+            let p_m = (small, big / 2.0, -small2);
+
+            let p_n = (0.0, 0.0, -big);
+
+            let lines = vec![
+                // 2Z
+                (p_a, p_c),
+                (p_a, p_e),
+                (p_a, p_g),
+                // Z
+                (p_b, p_c),
+                (p_c, p_d),
+                (p_d, p_e),
+                (p_e, p_f),
+                (p_f, p_g),
+                (p_g, p_b),
+                // Z -Z
+                (p_b, p_h),
+                (p_c, p_i),
+                (p_d, p_j),
+                (p_e, p_k),
+                (p_f, p_l),
+                (p_g, p_m),
+                // -Z
+                (p_h, p_i),
+                (p_i, p_j),
+                (p_j, p_k),
+                (p_k, p_l),
+                (p_l, p_m),
+                (p_m, p_h),
+                // -2Z
+                (p_h, p_n),
+                (p_j, p_n),
+                (p_l, p_n),
+            ];
+
+            gl::Begin(gl::GL_LINES);
+            gl::Color3f(1.0, 0.0, 1.0);
+            for (from, to) in lines {
+                gl::Vertex3f(from.0, from.1, from.2);
+                gl::Vertex3f(to.0, to.1, to.2);
+            }
             gl::End();
 
             gl::PopMatrix();
@@ -182,7 +264,7 @@ fn main() {
                 gl::Clear(gl::GL_COLOR_BUFFER_BIT);
                 gl::LoadIdentity();
             }
-            glu::look_at(-10.0, -10.0, 100.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+            glu::look_at(-20.0, -30.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
             app.draw_axes();
             app.draw();
         }
