@@ -16,6 +16,10 @@ impl CubicVector {
         Self { x, y, z }
     }
 
+    pub fn direction(direction: usize) -> Self {
+        DIRECTIONS[direction]
+    }
+
     pub fn x(&self) -> isize {
         self.x
     }
@@ -26,6 +30,10 @@ impl CubicVector {
 
     pub fn z(&self) -> isize {
         self.z
+    }
+
+    pub fn neighbor(&self, direction: usize) -> Self {
+        *self + Self::direction(direction)
     }
 
     pub fn distance(self, other: Self) -> isize {
@@ -48,6 +56,17 @@ impl From<CubicVector> for AxialVector {
         Self::new(cubic.x(), cubic.z())
     }
 }
+
+// Don't use constructor and lazy_static so that the compiler can actually optimize the use
+// of directions.
+const DIRECTIONS: [CubicVector; 6] = [
+    CubicVector { x: 1, y: -1, z: 0 },
+    CubicVector { x: 1, y: 0, z: -1 },
+    CubicVector { x: 0, y: 1, z: -1 },
+    CubicVector { x: -1, y: 1, z: 0 },
+    CubicVector { x: -1, y: 0, z: 1 },
+    CubicVector { x: 0, y: -1, z: 1 },
+];
 
 #[test]
 fn test_new_cubic_vector() {
@@ -116,4 +135,38 @@ fn test_cubic_vector_distance() {
     let b = CubicVector::new(-2, -3, 5);
     assert_eq!(a.distance(b), 8);
     assert_eq!(b.distance(a), 8);
+}
+
+#[test]
+fn test_directions_are_valid() {
+    for v in DIRECTIONS.iter() {
+        CubicVector::new(v.x(), v.y(), v.z());
+    }
+}
+
+#[test]
+fn test_all_directions_are_unique() {
+    for dir1 in 0..5 {
+        for dir2 in (dir1 + 1)..6 {
+            assert_ne!(DIRECTIONS[dir1], DIRECTIONS[dir2])
+        }
+    }
+}
+
+#[test]
+fn test_all_directions_have_opposite() {
+    for dir in 0..3 {
+        assert_eq!(
+            DIRECTIONS[dir] + DIRECTIONS[dir + 3],
+            CubicVector::new(0, 0, 0)
+        );
+    }
+}
+
+#[test]
+fn test_neighbor() {
+    assert_eq!(
+        CubicVector::new(-1, 0, 1).neighbor(0),
+        CubicVector::new(0, -1, 1)
+    );
 }
