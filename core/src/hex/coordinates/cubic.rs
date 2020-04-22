@@ -1,20 +1,17 @@
-use crate::coordinates::axial::AxialVector;
+use crate::hex::coordinates::axial::AxialVector;
+use crate::vector::Vector3ISize;
 use derive_more::Add;
 use std::ops::Mul;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
-pub struct CubicVector {
-    x: isize,
-    y: isize,
-    z: isize,
-}
+pub struct CubicVector(Vector3ISize);
 
 impl CubicVector {
     pub fn new(x: isize, y: isize, z: isize) -> Self {
         if x + y + z != 0 {
             panic!("Invalid CubicVector values x = {}, y = {}, z = {}", x, y, z);
         }
-        Self { x, y, z }
+        Self(Vector3ISize { x, y, z })
     }
 
     pub fn direction(direction: usize) -> Self {
@@ -22,15 +19,15 @@ impl CubicVector {
     }
 
     pub fn x(&self) -> isize {
-        self.x
+        self.0.x
     }
 
     pub fn y(&self) -> isize {
-        self.y
+        self.0.y
     }
 
     pub fn z(&self) -> isize {
-        self.z
+        self.0.z
     }
 
     pub fn neighbor(&self, direction: usize) -> Self {
@@ -39,7 +36,7 @@ impl CubicVector {
 
     pub fn distance(self, other: Self) -> isize {
         let vector = self - other;
-        (isize::abs(vector.x) + isize::abs(vector.y) + isize::abs(vector.z)) / 2
+        (isize::abs(vector.x()) + isize::abs(vector.y()) + isize::abs(vector.z())) / 2
     }
 
     pub fn ring_iter(&self, radius: usize) -> RingIter {
@@ -56,11 +53,7 @@ impl Mul<isize> for CubicVector {
     type Output = Self;
 
     fn mul(self, rhs: isize) -> Self::Output {
-        Self {
-            x: self.x * rhs,
-            y: self.y * rhs,
-            z: self.z * rhs,
-        }
+        Self(self.0 * rhs)
     }
 }
 
@@ -69,7 +62,7 @@ impl From<AxialVector> for CubicVector {
         let x = axial.q();
         let z = axial.r();
         let y = -x - z;
-        Self { x, y, z }
+        Self(Vector3ISize { x, y, z })
     }
 }
 
@@ -82,12 +75,12 @@ impl From<CubicVector> for AxialVector {
 // Don't use constructor and lazy_static so that the compiler can actually optimize the use
 // of directions.
 const DIRECTIONS: [CubicVector; 6] = [
-    CubicVector { x: 1, y: -1, z: 0 },
-    CubicVector { x: 1, y: 0, z: -1 },
-    CubicVector { x: 0, y: 1, z: -1 },
-    CubicVector { x: -1, y: 1, z: 0 },
-    CubicVector { x: -1, y: 0, z: 1 },
-    CubicVector { x: 0, y: -1, z: 1 },
+    CubicVector(Vector3ISize { x: 1, y: -1, z: 0 }),
+    CubicVector(Vector3ISize { x: 1, y: 0, z: -1 }),
+    CubicVector(Vector3ISize { x: 0, y: 1, z: -1 }),
+    CubicVector(Vector3ISize { x: -1, y: 1, z: 0 }),
+    CubicVector(Vector3ISize { x: -1, y: 0, z: 1 }),
+    CubicVector(Vector3ISize { x: 0, y: -1, z: 1 }),
 ];
 
 pub struct RingIter {
@@ -150,7 +143,7 @@ impl Iterator for RingIter {
 fn test_new_cubic_vector() {
     assert_eq!(
         CubicVector::new(1, 2, -3),
-        CubicVector { x: 1, y: 2, z: -3 }
+        CubicVector(Vector3ISize { x: 1, y: 2, z: -3 })
     )
 }
 

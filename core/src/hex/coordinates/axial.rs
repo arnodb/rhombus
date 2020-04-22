@@ -1,22 +1,20 @@
-use crate::coordinates::cubic::CubicVector;
+use crate::hex::coordinates::cubic::CubicVector;
+use crate::vector::Vector2ISize;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
-pub struct AxialVector {
-    q: isize,
-    r: isize,
-}
+pub struct AxialVector(Vector2ISize);
 
 impl AxialVector {
     pub fn new(q: isize, r: isize) -> Self {
-        Self { q, r }
+        Self(Vector2ISize { x: q, y: r })
     }
 
     pub fn q(&self) -> isize {
-        self.q
+        self.0.x
     }
 
     pub fn r(&self) -> isize {
-        self.r
+        self.0.y
     }
 
     pub fn distance(self, other: Self) -> isize {
@@ -26,7 +24,10 @@ impl AxialVector {
 
 #[test]
 fn test_new_axial_vector() {
-    assert_eq!(AxialVector::new(1, -3), AxialVector { q: 1, r: -3 })
+    assert_eq!(
+        AxialVector::new(1, -3),
+        AxialVector(Vector2ISize { x: 1, y: -3 })
+    )
 }
 
 #[test]

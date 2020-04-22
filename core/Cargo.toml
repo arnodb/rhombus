@@ -1,5 +1,5 @@
 [package]
-name = "rhombus_hex"
+name = "rhombus_core"
 version = "0.1.0"
 authors = ["Arnaud de Bossoreille <arnaud.debossoreille@gmail.com>"]
 edition = "2018"

@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "hex",
+    "core",
     "viewer",
 ]

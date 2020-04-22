@@ -1,4 +1,6 @@
 #[macro_use]
 extern crate derive_more;
 
-pub mod coordinates;
+pub mod vector;
+
+pub mod hex;

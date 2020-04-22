@@ -1,6 +1,6 @@
 use glutin_window::GlutinWindow;
 use piston_window::*;
-use rhombus_hex::coordinates::cubic::{CubicVector, RingIter};
+use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
 use std::time::Instant;
 
 mod gl;

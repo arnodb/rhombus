@@ -5,7 +5,7 @@ authors = ["Arnaud de Bossoreille <arnaud.debossoreille@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rhombus_hex = { path = "../hex"}
+rhombus_core = { path = "../core"}
 piston_window = "0.107"
 pistoncore-glutin_window = "0.63"
 
