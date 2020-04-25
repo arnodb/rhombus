@@ -17,13 +17,16 @@ matrix:
   fast_finish: true
 script:
     - |
-      if [ "$COVERAGE" = "1" ] && [ -z "$TRAVIS_TAG" ]; then
+      if [ "$COVERAGE" = "1" ] && [ -z "$TRAVIS_TAG" ]
+      then
         export CARGO_INCREMENTAL=0;
         export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zno-landing-pads";
+        export BUILD_MODULES="core"
+      else
+        export BUILD_MODULES="."
       fi
     - if [ "$TRAVIS_TAG" ]; then export CARGO_OPTIONS="${CARGO_OPTIONS} --release"; fi
-    - cargo build --verbose $CARGO_OPTIONS
-    - cargo test --verbose $CARGO_OPTIONS
+    - for MOD in $BUILD_MODULES; do cd "$MOD"; cargo build --verbose $CARGO_OPTIONS; cargo test --verbose $CARGO_OPTIONS; cd -; done
     - |
       if [ "$COVERAGE" = "1" ] && [ -z "$TRAVIS_TAG" ]; then
         zip -0 ccov.zip `find . -name "rhombus*.gc*" -print`;
