@@ -9,8 +9,24 @@ mod glu;
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
 
+const DARK_RED: (f32, f32, f32) = (0.5, 0.0, 0.0);
+const DARK_GREEN: (f32, f32, f32) = (0.0, 0.5, 0.0);
+const DARK_BLUE: (f32, f32, f32) = (0.0, 0.0, 0.5);
+//const DARK_YELLOW: (f32, f32, f32) = (0.5, 0.5, 0.0);
+//const DARK_MAGENTA: (f32, f32, f32) = (0.5, 0.0, 0.5);
+//const DARK_CYAN: (f32, f32, f32) = (0.0, 0.5, 0.5);
+const GREY: (f32, f32, f32) = (0.5, 0.5, 0.5);
+
+const RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
+const GREEN: (f32, f32, f32) = (0.0, 1.0, 0.0);
+const BLUE: (f32, f32, f32) = (0.0, 0.0, 1.0);
+//const YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
+//const MAGENTA: (f32, f32, f32) = (1.0, 0.0, 1.0);
+//const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
+const WHITE: (f32, f32, f32) = (1.0, 1.0, 1.0);
+
 const HEX_RADIUS: f32 = 1.0;
-const HEX_INTERIOR_RADIUS: f32 = HEX_RADIUS - HEX_RADIUS / 10.0;
+const HEX_RADIUS_RATIO: f32 = 1.0;
 
 struct HexApp {
     position: CubicVector,
@@ -52,23 +68,29 @@ impl HexApp {
         }
     }
 
+    fn set_color(color: (f32, f32, f32)) {
+        unsafe {
+            gl::Color3f(color.0, color.1, color.2);
+        }
+    }
+
     fn draw_axes(&self) {
         let length = 5.0;
         unsafe {
             gl::Begin(gl::GL_LINES);
-            gl::Color3f(1.0, 0.0, 0.0);
+            Self::set_color(RED);
             gl::Vertex3f(-length, 0.0, 0.0);
-            gl::Color3f(0.5, 0.0, 0.0);
+            Self::set_color(DARK_RED);
             gl::Vertex3f(length, 0.0, 0.0);
 
-            gl::Color3f(0.0, 1.0, 0.0);
+            Self::set_color(GREEN);
             gl::Vertex3f(0.0, -length, 0.0);
-            gl::Color3f(0.0, 0.5, 0.0);
+            Self::set_color(DARK_GREEN);
             gl::Vertex3f(0.0, length, 0.0);
 
-            gl::Color3f(0.0, 0.0, 1.0);
+            Self::set_color(BLUE);
             gl::Vertex3f(0.0, 0.0, -length);
-            gl::Color3f(0.0, 0.0, 0.5);
+            Self::set_color(DARK_BLUE);
             gl::Vertex3f(0.0, 0.0, length);
             gl::End();
         }
@@ -76,36 +98,62 @@ impl HexApp {
 
     fn draw(&self) {
         let position = self.position;
-        //Self::draw_hex(position);
-        Self::draw_dodeca(position);
+        Self::draw_hex(position, HEX_RADIUS, WHITE);
+        Self::draw_dodec(position, HEX_RADIUS, GREY);
+
+        if true {
+            let center = position;
+
+            Self::draw_hex_direction(center, 0, 3, DARK_RED);
+            Self::draw_hex_direction(center, 3, 2, RED);
+
+            Self::draw_hex_direction(center, 1, 3, DARK_GREEN);
+            Self::draw_hex_direction(center, 4, 2, GREEN);
+
+            Self::draw_hex_direction(center, 2, 3, DARK_BLUE);
+            Self::draw_hex_direction(center, 5, 2, BLUE);
+        }
+
         for radius in &self.full_rings {
             for hex in position.ring_iter(*radius) {
-                Self::draw_hex(hex);
+                Self::draw_hex(hex, HEX_RADIUS, WHITE);
             }
         }
         for ring in &self.moving_rings {
-            Self::draw_hex(ring.1);
+            Self::draw_hex(ring.1, HEX_RADIUS * 0.8, GREY);
         }
     }
 
-    fn draw_hex(position: CubicVector) {
+    fn draw_hex_direction(
+        mut origin: CubicVector,
+        direction: usize,
+        length: usize,
+        color: (f32, f32, f32),
+    ) {
+        for _ in 0..length {
+            origin = origin.neighbor(direction);
+            Self::draw_hex(origin, HEX_RADIUS * 0.3, color);
+        }
+    }
+
+    fn draw_hex(position: CubicVector, radius: f32, color: (f32, f32, f32)) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
 
-        let big = HEX_INTERIOR_RADIUS;
-        let small = HEX_INTERIOR_RADIUS * f32::sqrt(3.0) / 2.0;
+        let big = radius * HEX_RADIUS_RATIO;
+        let small = radius * HEX_RADIUS_RATIO * f32::sqrt(3.0) / 2.0;
 
         unsafe {
             gl::PushMatrix();
 
             gl::Translatef(
-                -HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (position.z() & 1) as f32 / 2.0),
-                HEX_RADIUS * row as f32 * 1.5,
+                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
+                -HEX_RADIUS * row as f32 * 1.5,
                 0.0,
             );
 
             gl::Begin(gl::GL_LINE_LOOP);
-            gl::Color3f(1.0, 1.0, 1.0);
+            Self::set_color(color);
             gl::Vertex3f(0.0, big, 0.0);
             gl::Vertex3f(small, big / 2.0, 0.0);
             gl::Vertex3f(small, -big / 2.0, 0.0);
@@ -118,23 +166,23 @@ impl HexApp {
         }
     }
 
-    fn draw_dodeca(position: CubicVector) {
+    fn draw_dodec(position: CubicVector, radius: f32, color: (f32, f32, f32)) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
 
-        let big = HEX_INTERIOR_RADIUS;
-        let small = HEX_INTERIOR_RADIUS * f32::sqrt(3.0) / 2.0;
-        let small2 = HEX_INTERIOR_RADIUS / (2.0 * f32::sqrt(2.0));
+        let big = radius * HEX_RADIUS_RATIO;
+        let small = radius * HEX_RADIUS_RATIO * f32::sqrt(3.0) / 2.0;
+        let small2 = radius * HEX_RADIUS_RATIO / (2.0 * f32::sqrt(2.0));
         // Fun fact: those two values are analytically identical.
-        //let big2 = small2 + HEX_INTERIOR_RADIUS / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
+        //let big2 = small2 + radius * HEX_RADIUS_RATIO / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
         let big2 = (small2 + big) / 2.0;
 
         unsafe {
             gl::PushMatrix();
 
             gl::Translatef(
-                -HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (position.z() & 1) as f32 / 2.0),
-                HEX_RADIUS * row as f32 * 1.5,
+                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
+                -HEX_RADIUS * 1.5 * row as f32,
                 0.0,
             );
 
@@ -189,7 +237,7 @@ impl HexApp {
             ];
 
             gl::Begin(gl::GL_LINES);
-            gl::Color3f(1.0, 0.0, 1.0);
+            Self::set_color(color);
             for (from, to) in lines {
                 gl::Vertex3f(from.0, from.1, from.2);
                 gl::Vertex3f(to.0, to.1, to.2);
@@ -236,7 +284,8 @@ fn main() {
     gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
 
     unsafe {
-        gl::LineWidth(1.);
+        gl::Enable(gl::GL_DEPTH_TEST);
+        gl::LineWidth(4.);
     }
 
     let Size { width, height } = window.draw_size();
@@ -261,7 +310,7 @@ fn main() {
 
         if let Some(_args) = event.render_args() {
             unsafe {
-                gl::Clear(gl::GL_COLOR_BUFFER_BIT);
+                gl::Clear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
                 gl::LoadIdentity();
             }
             glu::look_at(-20.0, -30.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
