@@ -1,9 +1,9 @@
 use crate::hex::coordinates::axial::AxialVector;
 use crate::vector::Vector3ISize;
 use derive_more::Add;
-use std::ops::Mul;
+use std::ops::{Mul, MulAssign};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
 pub struct CubicVector(Vector3ISize);
 
 impl CubicVector {
@@ -54,6 +54,20 @@ impl Mul<isize> for CubicVector {
 
     fn mul(self, rhs: isize) -> Self::Output {
         Self(self.0 * rhs)
+    }
+}
+
+impl MulAssign<isize> for CubicVector {
+    fn mul_assign(&mut self, rhs: isize) {
+        self.0 *= rhs
+    }
+}
+
+impl Mul<CubicVector> for isize {
+    type Output = CubicVector;
+
+    fn mul(self, rhs: CubicVector) -> Self::Output {
+        rhs * self
     }
 }
 

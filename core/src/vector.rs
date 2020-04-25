@@ -1,8 +1,9 @@
-use std::ops::Mul;
+use std::ops::{Mul, MulAssign};
+
 macro_rules! define_vector {
     ($name:ident, $($fields:ident),+) => {
 
-        #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
+        #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
         pub struct $name<T> {
             $(pub $fields: T,)+
         }
@@ -17,6 +18,15 @@ macro_rules! define_vector {
                 Self {
                     $($fields: self.$fields * rhs,)+
                 }
+            }
+        }
+
+        impl<T> MulAssign<T> for $name<T>
+        where
+            T: MulAssign<T> + Copy,
+        {
+            fn mul_assign(&mut self, rhs: T) {
+                $(self.$fields *= rhs;)+
             }
         }
 
