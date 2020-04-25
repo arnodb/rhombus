@@ -72,9 +72,11 @@ impl From<CubicVector> for AxialVector {
     }
 }
 
+const NUM_DIRECTIONS: usize = 6;
+
 // Don't use constructor and lazy_static so that the compiler can actually optimize the use
 // of directions.
-const DIRECTIONS: [CubicVector; 6] = [
+const DIRECTIONS: [CubicVector; NUM_DIRECTIONS] = [
     CubicVector(Vector3ISize { x: 1, y: -1, z: 0 }),
     CubicVector(Vector3ISize { x: 1, y: 0, z: -1 }),
     CubicVector(Vector3ISize { x: 0, y: 1, z: -1 }),
@@ -107,11 +109,11 @@ impl Iterator for RingIter {
             }
             let direction = self.direction;
             let edge_index = self.edge_index;
-            self.next = if direction < 6 {
+            self.next = if direction < NUM_DIRECTIONS {
                 if edge_index + 1 >= self.radius {
                     self.edge_index = 0;
                     self.direction = direction + 1;
-                    if direction + 1 < 6 {
+                    if direction + 1 < NUM_DIRECTIONS {
                         Some(current.neighbor(direction))
                     } else {
                         None
@@ -217,8 +219,8 @@ fn test_directions_are_valid() {
 
 #[test]
 fn test_all_directions_are_unique() {
-    for dir1 in 0..5 {
-        for dir2 in (dir1 + 1)..6 {
+    for dir1 in 0..NUM_DIRECTIONS - 1 {
+        for dir2 in dir1 + 1..NUM_DIRECTIONS {
             assert_ne!(DIRECTIONS[dir1], DIRECTIONS[dir2])
         }
     }
@@ -226,9 +228,9 @@ fn test_all_directions_are_unique() {
 
 #[test]
 fn test_all_directions_have_opposite() {
-    for dir in 0..3 {
+    for dir in 0..NUM_DIRECTIONS / 2 {
         assert_eq!(
-            DIRECTIONS[dir] + DIRECTIONS[dir + 3],
+            DIRECTIONS[dir] + DIRECTIONS[dir + NUM_DIRECTIONS / 2],
             CubicVector::new(0, 0, 0)
         );
     }
