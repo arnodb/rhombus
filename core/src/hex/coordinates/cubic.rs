@@ -30,22 +30,17 @@ impl CubicVector {
         self.0.z
     }
 
-    pub fn neighbor(&self, direction: usize) -> Self {
-        *self + Self::direction(direction)
-    }
-
     pub fn distance(self, other: Self) -> isize {
         let vector = self - other;
         (isize::abs(vector.x()) + isize::abs(vector.y()) + isize::abs(vector.z())) / 2
     }
 
+    pub fn neighbor(&self, direction: usize) -> Self {
+        *self + Self::direction(direction)
+    }
+
     pub fn ring_iter(&self, radius: usize) -> RingIter {
-        RingIter {
-            next: Some(Self::direction(4) * radius as isize),
-            direction: 0,
-            edge_index: 0,
-            radius,
-        }
+        RingIter::new(radius, *self)
     }
 }
 
@@ -100,15 +95,28 @@ const DIRECTIONS: [CubicVector; NUM_DIRECTIONS] = [
 ];
 
 pub struct RingIter {
-    next: Option<CubicVector>,
+    edge_length: usize,
     direction: usize,
+    next: CubicVector,
     edge_index: usize,
-    radius: usize,
 }
 
 impl RingIter {
+    fn new(radius: usize, center: CubicVector) -> Self {
+        Self {
+            edge_length: radius,
+            direction: 0,
+            next: center + radius as isize * CubicVector::direction(4),
+            edge_index: 1,
+        }
+    }
+
     pub fn peek(&mut self) -> Option<&CubicVector> {
-        self.next.as_ref()
+        if self.direction < 6 {
+            Some(&self.next)
+        } else {
+            None
+        }
     }
 }
 
@@ -116,39 +124,32 @@ impl Iterator for RingIter {
     type Item = CubicVector;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(current) = self.next {
-            if self.radius == 0 {
-                self.next = None;
-                return Some(current);
-            }
-            let direction = self.direction;
-            let edge_index = self.edge_index;
-            self.next = if direction < NUM_DIRECTIONS {
-                if edge_index + 1 >= self.radius {
-                    self.edge_index = 0;
-                    self.direction = direction + 1;
-                    if direction + 1 < NUM_DIRECTIONS {
-                        Some(current.neighbor(direction))
-                    } else {
-                        None
-                    }
-                } else {
-                    self.edge_index = edge_index + 1;
-                    Some(current.neighbor(direction))
-                }
+        let edge_length = self.edge_length;
+        let direction = self.direction;
+        if direction < 6 {
+            let next = self.next;
+            self.next = next.neighbor(direction);
+            let ei = self.edge_index;
+            if ei < edge_length {
+                self.edge_index = ei + 1;
             } else {
-                None
-            };
-            Some(current)
+                self.edge_index = 1;
+                self.direction = direction + 1;
+                while self.direction < 6 && edge_length == 0 {
+                    self.direction += 1;
+                }
+            }
+            Some(next)
         } else {
             None
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let radius = self.radius;
-        if radius > 0 {
-            (radius * 6, Some(radius * 6))
+        let el = self.edge_length;
+        if el > 0 {
+            let length = el * 6;
+            (length, Some(length))
         } else {
             (1, Some(1))
         }
@@ -258,37 +259,56 @@ fn test_neighbor() {
     );
 }
 
+#[cfg(test)]
+fn do_test_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
+    let center = CubicVector::new(0, 0, 0);
+    let mut iter = center.ring_iter(radius);
+    let mut peeked = iter.peek().cloned();
+    assert!(peeked.is_some());
+    let mut i = 0;
+    loop {
+        let next = iter.next();
+        assert_eq!(next, peeked);
+        peeked = iter.peek().cloned();
+        if i < expected.len() {
+            assert_eq!(next, Some(expected[i]));
+            assert_eq!(expected[i].distance(center), radius as isize);
+        } else {
+            assert_eq!(next, None);
+            break;
+        }
+        i += 1;
+    }
+    assert_eq!(peeked, None);
+    assert_eq!(iter.next(), None);
+    assert_eq!(iter.size_hint(), (expected.len(), Some(expected.len())));
+}
+
 #[test]
 fn test_ring_iter0() {
-    let iter = CubicVector::new(0, 0, 0).ring_iter(0);
-    assert_eq!(iter.size_hint(), (1, Some(1)));
-    assert_eq!(iter.collect::<Vec<_>>(), vec![CubicVector::new(0, 0, 0)]);
+    do_test_ring_iter(0, &vec![CubicVector::new(0, 0, 0)]);
 }
 
 #[test]
 fn test_ring_iter1() {
-    let iter = CubicVector::new(0, 0, 0).ring_iter(1);
-    assert_eq!(iter.size_hint(), (6, Some(6)));
-    assert_eq!(
-        iter.collect::<Vec<_>>(),
-        vec![
+    do_test_ring_iter(
+        1,
+        &vec![
             CubicVector::new(-1, 0, 1),
             CubicVector::new(0, -1, 1),
             CubicVector::new(1, -1, 0),
             CubicVector::new(1, 0, -1),
             CubicVector::new(0, 1, -1),
             CubicVector::new(-1, 1, 0),
-        ]
+        ],
     );
 }
 
 #[test]
 fn test_ring_iter2() {
-    let iter = CubicVector::new(0, 0, 0).ring_iter(2);
-    assert_eq!(iter.size_hint(), (12, Some(12)));
-    assert_eq!(
-        iter.collect::<Vec<_>>(),
-        vec![
+    do_test_ring_iter(
+        2,
+        &vec![
             CubicVector::new(-2, 0, 2),
             CubicVector::new(-1, -1, 2),
             CubicVector::new(0, -2, 2),
@@ -301,6 +321,6 @@ fn test_ring_iter2() {
             CubicVector::new(-1, 2, -1),
             CubicVector::new(-2, 2, 0),
             CubicVector::new(-2, 1, 1),
-        ]
+        ],
     );
 }

@@ -1,5 +1,6 @@
 use glutin_window::GlutinWindow;
 use piston_window::*;
+use rhombus_core::dodec::coordinates::quadric::{QuadricVector, SphereIter};
 use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
 use std::time::Instant;
 
@@ -12,58 +13,110 @@ const HEIGHT: u32 = 480;
 const DARK_RED: (f32, f32, f32) = (0.5, 0.0, 0.0);
 const DARK_GREEN: (f32, f32, f32) = (0.0, 0.5, 0.0);
 const DARK_BLUE: (f32, f32, f32) = (0.0, 0.0, 0.5);
-//const DARK_YELLOW: (f32, f32, f32) = (0.5, 0.5, 0.0);
-//const DARK_MAGENTA: (f32, f32, f32) = (0.5, 0.0, 0.5);
-//const DARK_CYAN: (f32, f32, f32) = (0.0, 0.5, 0.5);
+const DARK_YELLOW: (f32, f32, f32) = (0.5, 0.5, 0.0);
+const DARK_MAGENTA: (f32, f32, f32) = (0.5, 0.0, 0.5);
+const DARK_CYAN: (f32, f32, f32) = (0.0, 0.5, 0.5);
 const GREY: (f32, f32, f32) = (0.5, 0.5, 0.5);
 
 const RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
 const GREEN: (f32, f32, f32) = (0.0, 1.0, 0.0);
 const BLUE: (f32, f32, f32) = (0.0, 0.0, 1.0);
-//const YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
-//const MAGENTA: (f32, f32, f32) = (1.0, 0.0, 1.0);
-//const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
+const YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
+const MAGENTA: (f32, f32, f32) = (1.0, 0.0, 1.0);
+const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
 const WHITE: (f32, f32, f32) = (1.0, 1.0, 1.0);
 
+const COLORS: [(f32, f32, f32); 6] = [RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN];
+
 const HEX_RADIUS: f32 = 1.0;
-const HEX_RADIUS_RATIO: f32 = 1.0;
+const HEX_RADIUS_RATIO: f32 = 0.8;
+
+struct Snake<V, I> {
+    radius: usize,
+    state: Vec<V>,
+    iter: I,
+}
 
 struct HexApp {
-    position: CubicVector,
+    position: QuadricVector,
     full_rings: Vec<usize>,
-    moving_rings: Vec<(usize, CubicVector, RingIter)>,
+    snake_rings: Vec<Snake<CubicVector, RingIter>>,
+    full_spheres: Vec<usize>,
+    snake_spheres: Vec<Snake<QuadricVector, SphereIter>>,
 }
 
 impl HexApp {
-    fn new(position: CubicVector) -> Self {
-        let new_ring = |radius: usize| -> (usize, CubicVector, RingIter) {
-            let mut iter = position.ring_iter(radius);
-            let next = iter.next();
-            if iter.peek().is_some() {
-                (radius, next.expect("next"), iter)
-            } else {
-                (radius, next.expect("next"), position.ring_iter(radius))
+    fn new(position: QuadricVector) -> Self {
+        let new_ring = |radius: usize| -> Snake<CubicVector, RingIter> {
+            let mut iter = Self::snake_ring_center(position).ring_iter(radius);
+            Snake {
+                radius,
+                state: vec![iter.next().expect("first")],
+                iter,
+            }
+        };
+        let new_spheres = |radius: usize| -> Snake<QuadricVector, SphereIter> {
+            let mut iter = Self::snake_sphere_center(position).sphere_iter(radius);
+            Snake {
+                radius,
+                state: vec![iter.next().expect("first")],
+                iter,
             }
         };
         Self {
             position,
             full_rings: vec![2],
-            moving_rings: vec![new_ring(1), new_ring(3)],
+            snake_rings: vec![new_ring(1), new_ring(3)],
+            full_spheres: vec![1],
+            snake_spheres: vec![new_spheres(2)],
         }
+    }
+
+    fn snake_ring_center(position: QuadricVector) -> CubicVector {
+        let p2d = CubicVector::new(position.x(), position.y(), position.z());
+        p2d + 6 * CubicVector::direction(4) + 3 * CubicVector::direction(3)
+    }
+
+    fn snake_ring_tail_size(radius: usize) -> usize {
+        3 * radius
+    }
+
+    fn snake_sphere_center(position: QuadricVector) -> QuadricVector {
+        position + 6 * QuadricVector::direction(1) + 3 * QuadricVector::direction(0)
+    }
+
+    fn snake_sphere_tail_size(radius: usize) -> usize {
+        12 * radius
     }
 
     fn advance(&mut self, num: u64) {
         let position = self.position;
-        let adv = |radius: usize, iter: &mut RingIter| -> CubicVector {
-            let next = iter.next().expect("next");
-            if iter.peek().is_none() {
-                *iter = position.ring_iter(radius);
-            }
-            next
-        };
-        for ring in &mut self.moving_rings {
+        for snake in &mut self.snake_rings {
             for _ in 0..num {
-                ring.1 = adv(ring.0, &mut ring.2);
+                if let Some(hex) = snake.iter.next() {
+                    snake.state.push(hex);
+                } else {
+                    snake.iter = Self::snake_ring_center(position).ring_iter(snake.radius);
+                    let slice = snake.state.as_mut_slice();
+                    let len = slice.len().min(Self::snake_ring_tail_size(snake.radius));
+                    slice.copy_within(slice.len() - len..slice.len(), 0);
+                    snake.state.truncate(len);
+                    snake.state.push(snake.iter.next().expect("first"));
+                }
+            }
+        }
+        for snake in &mut self.snake_spheres {
+            for _ in 0..num {
+                if let Some(dodec) = snake.iter.next() {
+                    snake.state.push(dodec);
+                } else {
+                    snake.iter = Self::snake_sphere_center(position).sphere_iter(snake.radius);
+                    let slice = snake.state.as_mut_slice();
+                    let len = slice.len().min(Self::snake_sphere_tail_size(snake.radius));
+                    slice.copy_within(slice.len() - len..slice.len(), 0);
+                    snake.state.truncate(len);
+                    snake.state.push(snake.iter.next().expect("first"));
+                }
             }
         }
     }
@@ -98,11 +151,12 @@ impl HexApp {
 
     fn draw(&self) {
         let position = self.position;
-        Self::draw_hex(position, HEX_RADIUS, WHITE);
+        let p2d = CubicVector::new(position.x(), position.y(), position.z());
+        Self::draw_hex(p2d, HEX_RADIUS, WHITE);
         Self::draw_dodec(position, HEX_RADIUS, GREY);
 
         if true {
-            let center = position;
+            let center = p2d - 4 * CubicVector::direction(0);
 
             Self::draw_hex_direction(center, 0, 3, DARK_RED);
             Self::draw_hex_direction(center, 3, 2, RED);
@@ -114,13 +168,59 @@ impl HexApp {
             Self::draw_hex_direction(center, 5, 2, BLUE);
         }
 
+        if true {
+            let center = position + 4 * QuadricVector::direction(0);
+
+            Self::draw_dodec_direction(center, 0, 3, DARK_RED);
+            Self::draw_dodec_direction(center, 6, 2, RED);
+
+            Self::draw_dodec_direction(center, 1, 3, DARK_GREEN);
+            Self::draw_dodec_direction(center, 7, 2, GREEN);
+
+            Self::draw_dodec_direction(center, 2, 3, DARK_BLUE);
+            Self::draw_dodec_direction(center, 8, 2, BLUE);
+
+            Self::draw_dodec_direction(center, 3, 3, DARK_YELLOW);
+            Self::draw_dodec_direction(center, 9, 2, YELLOW);
+
+            Self::draw_dodec_direction(center, 4, 3, DARK_MAGENTA);
+            Self::draw_dodec_direction(center, 10, 2, MAGENTA);
+
+            Self::draw_dodec_direction(center, 5, 3, DARK_CYAN);
+            Self::draw_dodec_direction(center, 11, 2, CYAN);
+        }
+
         for radius in &self.full_rings {
-            for hex in position.ring_iter(*radius) {
+            for hex in p2d.ring_iter(*radius) {
                 Self::draw_hex(hex, HEX_RADIUS, WHITE);
             }
         }
-        for ring in &self.moving_rings {
-            Self::draw_hex(ring.1, HEX_RADIUS * 0.8, GREY);
+        for snake in &self.snake_rings {
+            for (i, hex) in snake
+                .state
+                .iter()
+                .rev()
+                .take(Self::snake_ring_tail_size(snake.radius))
+                .enumerate()
+            {
+                Self::draw_hex(*hex, HEX_RADIUS * 0.8, COLORS[i % 6]);
+            }
+        }
+        for radius in &self.full_spheres {
+            for dodec in (position + 6 * QuadricVector::direction(10)).sphere_iter(*radius) {
+                Self::draw_dodec(dodec, HEX_RADIUS, GREY);
+            }
+        }
+        for snake in &self.snake_spheres {
+            for (i, dodec) in snake
+                .state
+                .iter()
+                .rev()
+                .take(Self::snake_sphere_tail_size(snake.radius))
+                .enumerate()
+            {
+                Self::draw_dodec(*dodec, HEX_RADIUS * 0.8, COLORS[i % 6]);
+            }
         }
     }
 
@@ -166,9 +266,22 @@ impl HexApp {
         }
     }
 
-    fn draw_dodec(position: CubicVector, radius: f32, color: (f32, f32, f32)) {
+    fn draw_dodec_direction(
+        mut origin: QuadricVector,
+        direction: usize,
+        length: usize,
+        color: (f32, f32, f32),
+    ) {
+        for _ in 0..length {
+            origin = origin.neighbor(direction);
+            Self::draw_dodec(origin, HEX_RADIUS * 0.3, color);
+        }
+    }
+
+    fn draw_dodec(position: QuadricVector, radius: f32, color: (f32, f32, f32)) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
+        let depth = position.t();
 
         let big = radius * HEX_RADIUS_RATIO;
         let small = radius * HEX_RADIUS_RATIO * f32::sqrt(3.0) / 2.0;
@@ -181,59 +294,64 @@ impl HexApp {
             gl::PushMatrix();
 
             gl::Translatef(
-                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
-                -HEX_RADIUS * 1.5 * row as f32,
-                0.0,
+                HEX_RADIUS
+                    * f32::sqrt(3.0)
+                    * ((col as f32) + ((row & 1) as f32 + depth as f32) / 2.0),
+                -HEX_RADIUS * 1.5 * row as f32 - depth as f32 / 2.0,
+                -HEX_RADIUS * (1.0 + small2) * depth as f32,
             );
 
-            let p_a = (0.0, 0.0, big);
+            let p_a = (0.0, 0.0, -big);
 
-            let p_b = (0.0, big, small2);
-            let p_c = (-small, big / 2.0, big2);
-            let p_d = (-small, -big / 2.0, small2);
-            let p_e = (0.0, -big, big2);
-            let p_f = (small, -big / 2.0, small2);
-            let p_g = (small, big / 2.0, big2);
+            let p_b = (small, big / 2.0, -big2);
+            let p_c = (-small, big / 2.0, -big2);
+            let p_d = (0.0, -big, -big2);
 
-            let p_h = (0.0, big, -big2);
-            let p_i = (-small, big / 2.0, -small2);
-            let p_j = (-small, -big / 2.0, -big2);
-            let p_k = (0.0, -big, -small2);
-            let p_l = (small, -big / 2.0, -big2);
-            let p_m = (small, big / 2.0, -small2);
+            let p_e = (0.0, big, -small2);
+            let p_f = (-small, -big / 2.0, -small2);
+            let p_g = (small, -big / 2.0, -small2);
 
-            let p_n = (0.0, 0.0, -big);
+            let p_h = (small, big / 2.0, small2);
+            let p_i = (-small, big / 2.0, small2);
+            let p_j = (0.0, -big, small2);
+
+            let p_k = (0.0, big, big2);
+            let p_l = (-small, -big / 2.0, big2);
+            let p_m = (small, -big / 2.0, big2);
+
+            let p_n = (0.0, 0.0, big);
 
             let lines = vec![
-                // 2Z
+                // -big -big2
+                (p_a, p_b),
                 (p_a, p_c),
-                (p_a, p_e),
-                (p_a, p_g),
-                // Z
-                (p_b, p_c),
-                (p_c, p_d),
-                (p_d, p_e),
-                (p_e, p_f),
-                (p_f, p_g),
-                (p_g, p_b),
-                // Z -Z
+                (p_a, p_d),
+                // -big2 -small2
+                (p_b, p_e),
+                (p_b, p_g),
+                (p_c, p_e),
+                (p_c, p_f),
+                (p_d, p_f),
+                (p_d, p_g),
+                // -big2 small2
                 (p_b, p_h),
                 (p_c, p_i),
                 (p_d, p_j),
+                // -small2 big2
                 (p_e, p_k),
                 (p_f, p_l),
                 (p_g, p_m),
-                // -Z
-                (p_h, p_i),
-                (p_i, p_j),
-                (p_j, p_k),
-                (p_k, p_l),
-                (p_l, p_m),
-                (p_m, p_h),
-                // -2Z
-                (p_h, p_n),
-                (p_j, p_n),
+                // small2 big2
+                (p_h, p_m),
+                (p_h, p_k),
+                (p_i, p_k),
+                (p_i, p_l),
+                (p_j, p_l),
+                (p_j, p_m),
+                // big2 big
+                (p_k, p_n),
                 (p_l, p_n),
+                (p_m, p_n),
             ];
 
             gl::Begin(gl::GL_LINES);
@@ -266,7 +384,7 @@ fn resize(width: f64, height: f64) {
             -near_height,
             near_height,
             20.,
-            200.,
+            1000.,
         );
         gl::MatrixMode(gl::GL_MODELVIEW);
         gl::LoadIdentity();
@@ -274,7 +392,7 @@ fn resize(width: f64, height: f64) {
 }
 
 fn main() {
-    let mut app = HexApp::new(CubicVector::new(0, 0, 0));
+    let mut app = HexApp::new(QuadricVector::new(0, 0, 0, 0));
 
     let mut window: GlutinWindow = WindowSettings::new("Rhombus Viewer", [WIDTH, HEIGHT])
         .graphics_api(OpenGL::V2_1)
@@ -285,7 +403,7 @@ fn main() {
 
     unsafe {
         gl::Enable(gl::GL_DEPTH_TEST);
-        gl::LineWidth(4.);
+        gl::LineWidth(2.);
     }
 
     let Size { width, height } = window.draw_size();
@@ -313,7 +431,7 @@ fn main() {
                 gl::Clear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
                 gl::LoadIdentity();
             }
-            glu::look_at(-20.0, -30.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+            glu::look_at(-40.0, -60.0, 100.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
             app.draw_axes();
             app.draw();
         }
