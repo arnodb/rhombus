@@ -20,13 +20,23 @@ pub struct HexFlatBuilderDemo {
 impl HexFlatBuilderDemo {
     pub fn new(position: CubicVector) -> Self {
         let mut world = BTreeMap::new();
-        let axial = AxialVector::from(position);
-        world.insert((axial.q(), axial.r()), HexState::Open);
+        world.insert(Self::to_world_key(position), HexState::Open);
         Self {
             position,
             world,
             direction: 0,
         }
+    }
+
+    fn to_world_key(position: CubicVector) -> (isize, isize) {
+        let axial = AxialVector::from(position);
+        (axial.q(), axial.r())
+    }
+
+    fn wallize(&mut self, pos: CubicVector) {
+        self.world
+            .entry(Self::to_world_key(pos))
+            .or_insert_with(|| HexState::Wall);
     }
 }
 
@@ -53,32 +63,36 @@ impl Demo for HexFlatBuilderDemo {
                     Key::Right => self.direction = (self.direction + 5) % 6,
                     Key::Up => {
                         let next = self.position.neighbor(self.direction);
-                        let next_axial = AxialVector::from(next);
                         let mut new = false;
-                        let next_state = self
-                            .world
-                            .entry((next_axial.q(), next_axial.r()))
-                            .or_insert_with(|| {
-                                new = true;
-                                HexState::Open
-                            });
+                        let next_state =
+                            self.world
+                                .entry(Self::to_world_key(next))
+                                .or_insert_with(|| {
+                                    new = true;
+                                    HexState::Open
+                                });
                         match next_state {
                             HexState::Open => {
                                 if new {
                                     // Left
-                                    let side = AxialVector::from(
-                                        self.position.neighbor((self.direction + 1) % 6),
-                                    );
-                                    self.world
-                                        .entry((side.q(), side.r()))
-                                        .or_insert_with(|| HexState::Wall);
+                                    self.wallize(self.position.neighbor((self.direction + 1) % 6));
                                     // Right
-                                    let side = AxialVector::from(
-                                        self.position.neighbor((self.direction + 5) % 6),
-                                    );
-                                    self.world
-                                        .entry((side.q(), side.r()))
-                                        .or_insert_with(|| HexState::Wall);
+                                    self.wallize(self.position.neighbor((self.direction + 5) % 6));
+                                    // Ahead
+                                    let ahead_left = next.neighbor((self.direction + 1) % 6);
+                                    let ahead = next.neighbor(self.direction);
+                                    let ahead_right = next.neighbor((self.direction + 5) % 6);
+                                    match (
+                                        self.world.get(&Self::to_world_key(ahead_left)),
+                                        self.world.get(&Self::to_world_key(ahead)),
+                                        self.world.get(&Self::to_world_key(ahead_right)),
+                                    ) {
+                                        (Some(HexState::Open), _, _)
+                                        | (_, _, Some(HexState::Open)) => {
+                                            self.wallize(ahead);
+                                        }
+                                        _ => {}
+                                    }
                                 }
                                 self.position = next;
                             }
