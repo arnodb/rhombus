@@ -8,6 +8,7 @@ edition = "2018"
 rhombus_core = { path = "../core"}
 piston_window = "0.107"
 pistoncore-glutin_window = "0.63"
+structopt = "0.3"
 
 [build-dependencies]
 gl_generator = "0.14"

@@ -11,6 +11,7 @@ use piston_window::*;
 use rhombus_core::dodec::coordinates::quadric::QuadricVector;
 use rhombus_core::hex::coordinates::cubic::CubicVector;
 use std::time::Instant;
+use structopt::StructOpt;
 
 mod gl;
 mod glu;
@@ -25,6 +26,13 @@ const HEX_RADIUS: f32 = 1.0;
 const HEX_RADIUS_RATIO: f32 = 0.8;
 
 const NUM_DEMOS: usize = 6;
+
+const DEMO_HEX_DIRECTIONS: usize = 0;
+const DEMO_HEX_RING: usize = 1;
+const DEMO_HEX_SNAKE: usize = 2;
+const DEMO_DODEC_DIRECTIONS: usize = 3;
+const DEMO_DODEC_SPHERE: usize = 4;
+const DEMO_DODEC_SNAKE: usize = 5;
 
 enum RhombusViewerDemo {
     HexDirections(HexDirectionsDemo),
@@ -60,6 +68,7 @@ impl RhombusViewerDemo {
 }
 
 enum RhombusViewerAnimation {
+    Fixed { last_millis: u64 },
     Rotating { last_millis: u64, demo_num: usize },
 }
 
@@ -70,43 +79,52 @@ struct RhombusViewer {
 }
 
 impl RhombusViewer {
-    fn new(position: QuadricVector) -> Self {
+    fn new(position: QuadricVector, demo_num: Option<usize>) -> Self {
+        let first_demo_num = demo_num.unwrap_or(0);
         Self {
             position,
-            demo: Self::new_demo(0, position),
-            animation: RhombusViewerAnimation::Rotating {
-                last_millis: 0,
-                demo_num: 0,
+            demo: Self::new_demo(first_demo_num, position),
+            animation: if demo_num.is_some() {
+                RhombusViewerAnimation::Fixed { last_millis: 0 }
+            } else {
+                RhombusViewerAnimation::Rotating {
+                    last_millis: 0,
+                    demo_num: first_demo_num,
+                }
             },
         }
     }
 
-    fn new_demo(num: usize, position: QuadricVector) -> RhombusViewerDemo {
-        match num % 6 {
-            0 => RhombusViewerDemo::HexDirections(HexDirectionsDemo::new(CubicVector::new(
+    fn new_demo(demo_num: usize, position: QuadricVector) -> RhombusViewerDemo {
+        match demo_num {
+            DEMO_HEX_DIRECTIONS => RhombusViewerDemo::HexDirections(HexDirectionsDemo::new(
+                CubicVector::new(position.x(), position.y(), position.z()),
+            )),
+            DEMO_HEX_RING => RhombusViewerDemo::HexRing(HexRingDemo::new(CubicVector::new(
                 position.x(),
                 position.y(),
                 position.z(),
             ))),
-            1 => RhombusViewerDemo::HexRing(HexRingDemo::new(CubicVector::new(
+            DEMO_HEX_SNAKE => RhombusViewerDemo::HexSnake(HexSnakeDemo::new(CubicVector::new(
                 position.x(),
                 position.y(),
                 position.z(),
             ))),
-            2 => RhombusViewerDemo::HexSnake(HexSnakeDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
-            3 => RhombusViewerDemo::DodecDirections(DodecDirectionsDemo::new(position)),
-            4 => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
-            5 => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
+            DEMO_DODEC_DIRECTIONS => {
+                RhombusViewerDemo::DodecDirections(DodecDirectionsDemo::new(position))
+            }
+            DEMO_DODEC_SPHERE => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
+            DEMO_DODEC_SNAKE => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
             _ => unreachable!(),
         }
     }
 
     fn advance(&mut self, millis: u64) {
         match &mut self.animation {
+            RhombusViewerAnimation::Fixed { last_millis, .. } => {
+                *last_millis += millis;
+                self.demo.advance(millis);
+            }
             RhombusViewerAnimation::Rotating {
                 last_millis,
                 demo_num,
@@ -115,7 +133,7 @@ impl RhombusViewer {
                     *last_millis += millis;
                     self.demo.advance(millis);
                 } else {
-                    let next_demo_num = *demo_num + 1 % NUM_DEMOS;
+                    let next_demo_num = (*demo_num + 1) % NUM_DEMOS;
                     self.demo = Self::new_demo(next_demo_num, self.position);
                     *last_millis = 0;
                     *demo_num = next_demo_num;
@@ -310,8 +328,34 @@ fn resize(width: f64, height: f64) {
     }
 }
 
+#[derive(StructOpt, Debug)]
+enum DemoOption {
+    #[structopt(name = "hex-directions")]
+    HexDirections = DEMO_HEX_DIRECTIONS as isize,
+    #[structopt(name = "hex-ring")]
+    HexRing = DEMO_HEX_RING as isize,
+    #[structopt(name = "hex-snake")]
+    HexSnake = DEMO_HEX_SNAKE as isize,
+    #[structopt(name = "dodec-directions")]
+    DodecDirections = DEMO_DODEC_DIRECTIONS as isize,
+    #[structopt(name = "dodec-sphere")]
+    DodecSphere = DEMO_DODEC_SPHERE as isize,
+    #[structopt(name = "dodec-snake")]
+    DodecSnake = DEMO_DODEC_SNAKE as isize,
+}
+
+#[derive(StructOpt, Debug)]
+struct Options {
+    #[structopt(subcommand)]
+    demo: Option<DemoOption>,
+}
+
 fn main() {
-    let mut app = RhombusViewer::new(QuadricVector::new(0, 0, 0, 0));
+    let options = Options::from_args();
+    let mut app = RhombusViewer::new(
+        QuadricVector::new(0, 0, 0, 0),
+        options.demo.map(|demo| demo as usize),
+    );
 
     let mut window: GlutinWindow = WindowSettings::new("Rhombus Viewer", [WIDTH, HEIGHT])
         .graphics_api(OpenGL::V2_1)
