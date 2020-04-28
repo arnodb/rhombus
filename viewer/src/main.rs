@@ -1,127 +1,141 @@
+use crate::color::{Color, BLUE, DARK_BLUE, DARK_GREEN, DARK_RED, GREEN, GREY, RED, WHITE};
+use crate::demo::dodec::directions::DodecDirectionsDemo;
+use crate::demo::dodec::snake::DodecSnakeDemo;
+use crate::demo::dodec::sphere::DodecSphereDemo;
+use crate::demo::hex::directions::HexDirectionsDemo;
+use crate::demo::hex::ring::HexRingDemo;
+use crate::demo::hex::snake::HexSnakeDemo;
+use crate::demo::{Demo, DemoGraphics};
 use glutin_window::GlutinWindow;
 use piston_window::*;
-use rhombus_core::dodec::coordinates::quadric::{QuadricVector, SphereIter};
-use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
+use rhombus_core::dodec::coordinates::quadric::QuadricVector;
+use rhombus_core::hex::coordinates::cubic::CubicVector;
 use std::time::Instant;
 
 mod gl;
 mod glu;
 
+mod color;
+mod demo;
+
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
-
-const DARK_RED: (f32, f32, f32) = (0.5, 0.0, 0.0);
-const DARK_GREEN: (f32, f32, f32) = (0.0, 0.5, 0.0);
-const DARK_BLUE: (f32, f32, f32) = (0.0, 0.0, 0.5);
-const DARK_YELLOW: (f32, f32, f32) = (0.5, 0.5, 0.0);
-const DARK_MAGENTA: (f32, f32, f32) = (0.5, 0.0, 0.5);
-const DARK_CYAN: (f32, f32, f32) = (0.0, 0.5, 0.5);
-const GREY: (f32, f32, f32) = (0.5, 0.5, 0.5);
-
-const RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
-const GREEN: (f32, f32, f32) = (0.0, 1.0, 0.0);
-const BLUE: (f32, f32, f32) = (0.0, 0.0, 1.0);
-const YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
-const MAGENTA: (f32, f32, f32) = (1.0, 0.0, 1.0);
-const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
-const WHITE: (f32, f32, f32) = (1.0, 1.0, 1.0);
-
-const COLORS: [(f32, f32, f32); 6] = [RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN];
 
 const HEX_RADIUS: f32 = 1.0;
 const HEX_RADIUS_RATIO: f32 = 0.8;
 
-struct Snake<V, I> {
-    radius: usize,
-    state: Vec<V>,
-    iter: I,
+const NUM_DEMOS: usize = 6;
+
+enum RhombusViewerDemo {
+    HexDirections(HexDirectionsDemo),
+    HexRing(HexRingDemo),
+    HexSnake(HexSnakeDemo),
+    DodecDirections(DodecDirectionsDemo),
+    DodecSphere(DodecSphereDemo),
+    DodecSnake(DodecSnakeDemo),
 }
 
-struct HexApp {
+impl RhombusViewerDemo {
+    fn advance(&mut self, millis: u64) {
+        match self {
+            Self::HexDirections(demo) => demo.advance(millis),
+            Self::HexRing(demo) => demo.advance(millis),
+            Self::HexSnake(demo) => demo.advance(millis),
+            Self::DodecDirections(demo) => demo.advance(millis),
+            Self::DodecSphere(demo) => demo.advance(millis),
+            Self::DodecSnake(demo) => demo.advance(millis),
+        }
+    }
+
+    fn draw(&self, graphics: &dyn DemoGraphics) {
+        match self {
+            Self::HexDirections(demo) => demo.draw(graphics),
+            Self::HexRing(demo) => demo.draw(graphics),
+            Self::HexSnake(demo) => demo.draw(graphics),
+            Self::DodecDirections(demo) => demo.draw(graphics),
+            Self::DodecSphere(demo) => demo.draw(graphics),
+            Self::DodecSnake(demo) => demo.draw(graphics),
+        }
+    }
+}
+
+enum RhombusViewerAnimation {
+    Rotating { last_millis: u64, demo_num: usize },
+}
+
+struct RhombusViewer {
     position: QuadricVector,
-    full_rings: Vec<usize>,
-    snake_rings: Vec<Snake<CubicVector, RingIter>>,
-    full_spheres: Vec<usize>,
-    snake_spheres: Vec<Snake<QuadricVector, SphereIter>>,
+    demo: RhombusViewerDemo,
+    animation: RhombusViewerAnimation,
 }
 
-impl HexApp {
+impl RhombusViewer {
     fn new(position: QuadricVector) -> Self {
-        let new_ring = |radius: usize| -> Snake<CubicVector, RingIter> {
-            let mut iter = Self::snake_ring_center(position).ring_iter(radius);
-            Snake {
-                radius,
-                state: vec![iter.next().expect("first")],
-                iter,
-            }
-        };
-        let new_spheres = |radius: usize| -> Snake<QuadricVector, SphereIter> {
-            let mut iter = Self::snake_sphere_center(position).sphere_iter(radius);
-            Snake {
-                radius,
-                state: vec![iter.next().expect("first")],
-                iter,
-            }
-        };
         Self {
             position,
-            full_rings: vec![2],
-            snake_rings: vec![new_ring(1), new_ring(3)],
-            full_spheres: vec![1],
-            snake_spheres: vec![new_spheres(2)],
+            demo: Self::new_demo(0, position),
+            animation: RhombusViewerAnimation::Rotating {
+                last_millis: 0,
+                demo_num: 0,
+            },
         }
     }
 
-    fn snake_ring_center(position: QuadricVector) -> CubicVector {
-        let p2d = CubicVector::new(position.x(), position.y(), position.z());
-        p2d + 6 * CubicVector::direction(4) + 3 * CubicVector::direction(3)
+    fn new_demo(num: usize, position: QuadricVector) -> RhombusViewerDemo {
+        match num % 6 {
+            0 => RhombusViewerDemo::HexDirections(HexDirectionsDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
+            1 => RhombusViewerDemo::HexRing(HexRingDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
+            2 => RhombusViewerDemo::HexSnake(HexSnakeDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
+            3 => RhombusViewerDemo::DodecDirections(DodecDirectionsDemo::new(position)),
+            4 => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
+            5 => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
+            _ => unreachable!(),
+        }
     }
 
-    fn snake_ring_tail_size(radius: usize) -> usize {
-        3 * radius
+    fn advance(&mut self, millis: u64) {
+        match &mut self.animation {
+            RhombusViewerAnimation::Rotating {
+                last_millis,
+                demo_num,
+            } => {
+                if *last_millis + millis <= 5000 {
+                    *last_millis += millis;
+                    self.demo.advance(millis);
+                } else {
+                    let next_demo_num = *demo_num + 1 % NUM_DEMOS;
+                    self.demo = Self::new_demo(next_demo_num, self.position);
+                    *last_millis = 0;
+                    *demo_num = next_demo_num;
+                }
+            }
+        }
     }
 
-    fn snake_sphere_center(position: QuadricVector) -> QuadricVector {
-        position + 6 * QuadricVector::direction(1) + 3 * QuadricVector::direction(0)
-    }
-
-    fn snake_sphere_tail_size(radius: usize) -> usize {
-        12 * radius
-    }
-
-    fn advance(&mut self, num: u64) {
+    fn draw(&self) {
         let position = self.position;
-        for snake in &mut self.snake_rings {
-            for _ in 0..num {
-                if let Some(hex) = snake.iter.next() {
-                    snake.state.push(hex);
-                } else {
-                    snake.iter = Self::snake_ring_center(position).ring_iter(snake.radius);
-                    let slice = snake.state.as_mut_slice();
-                    let len = slice.len().min(Self::snake_ring_tail_size(snake.radius));
-                    slice.copy_within(slice.len() - len..slice.len(), 0);
-                    snake.state.truncate(len);
-                    snake.state.push(snake.iter.next().expect("first"));
-                }
-            }
+        let p2d = CubicVector::new(position.x(), position.y(), position.z());
+        self.draw_axes();
+        if false {
+            self.draw_hex(p2d, 1.0, WHITE);
+            self.draw_dodec(position, 1.0, GREY);
         }
-        for snake in &mut self.snake_spheres {
-            for _ in 0..num {
-                if let Some(dodec) = snake.iter.next() {
-                    snake.state.push(dodec);
-                } else {
-                    snake.iter = Self::snake_sphere_center(position).sphere_iter(snake.radius);
-                    let slice = snake.state.as_mut_slice();
-                    let len = slice.len().min(Self::snake_sphere_tail_size(snake.radius));
-                    slice.copy_within(slice.len() - len..slice.len(), 0);
-                    snake.state.truncate(len);
-                    snake.state.push(snake.iter.next().expect("first"));
-                }
-            }
-        }
+        self.demo.draw(self);
     }
 
-    fn set_color(color: (f32, f32, f32)) {
+    fn set_color(color: Color) {
         unsafe {
             gl::Color3f(color.0, color.1, color.2);
         }
@@ -148,100 +162,16 @@ impl HexApp {
             gl::End();
         }
     }
+}
 
-    fn draw(&self) {
-        let position = self.position;
-        let p2d = CubicVector::new(position.x(), position.y(), position.z());
-        Self::draw_hex(p2d, HEX_RADIUS, WHITE);
-        Self::draw_dodec(position, HEX_RADIUS, GREY);
-
-        if true {
-            let center = p2d - 4 * CubicVector::direction(0);
-
-            Self::draw_hex_direction(center, 0, 3, DARK_RED);
-            Self::draw_hex_direction(center, 3, 2, RED);
-
-            Self::draw_hex_direction(center, 1, 3, DARK_GREEN);
-            Self::draw_hex_direction(center, 4, 2, GREEN);
-
-            Self::draw_hex_direction(center, 2, 3, DARK_BLUE);
-            Self::draw_hex_direction(center, 5, 2, BLUE);
-        }
-
-        if true {
-            let center = position + 4 * QuadricVector::direction(0);
-
-            Self::draw_dodec_direction(center, 0, 3, DARK_RED);
-            Self::draw_dodec_direction(center, 6, 2, RED);
-
-            Self::draw_dodec_direction(center, 1, 3, DARK_GREEN);
-            Self::draw_dodec_direction(center, 7, 2, GREEN);
-
-            Self::draw_dodec_direction(center, 2, 3, DARK_BLUE);
-            Self::draw_dodec_direction(center, 8, 2, BLUE);
-
-            Self::draw_dodec_direction(center, 3, 3, DARK_YELLOW);
-            Self::draw_dodec_direction(center, 9, 2, YELLOW);
-
-            Self::draw_dodec_direction(center, 4, 3, DARK_MAGENTA);
-            Self::draw_dodec_direction(center, 10, 2, MAGENTA);
-
-            Self::draw_dodec_direction(center, 5, 3, DARK_CYAN);
-            Self::draw_dodec_direction(center, 11, 2, CYAN);
-        }
-
-        for radius in &self.full_rings {
-            for hex in p2d.ring_iter(*radius) {
-                Self::draw_hex(hex, HEX_RADIUS, WHITE);
-            }
-        }
-        for snake in &self.snake_rings {
-            for (i, hex) in snake
-                .state
-                .iter()
-                .rev()
-                .take(Self::snake_ring_tail_size(snake.radius))
-                .enumerate()
-            {
-                Self::draw_hex(*hex, HEX_RADIUS * 0.8, COLORS[i % 6]);
-            }
-        }
-        for radius in &self.full_spheres {
-            for dodec in (position + 6 * QuadricVector::direction(10)).sphere_iter(*radius) {
-                Self::draw_dodec(dodec, HEX_RADIUS, GREY);
-            }
-        }
-        for snake in &self.snake_spheres {
-            for (i, dodec) in snake
-                .state
-                .iter()
-                .rev()
-                .take(Self::snake_sphere_tail_size(snake.radius))
-                .enumerate()
-            {
-                Self::draw_dodec(*dodec, HEX_RADIUS * 0.8, COLORS[i % 6]);
-            }
-        }
-    }
-
-    fn draw_hex_direction(
-        mut origin: CubicVector,
-        direction: usize,
-        length: usize,
-        color: (f32, f32, f32),
-    ) {
-        for _ in 0..length {
-            origin = origin.neighbor(direction);
-            Self::draw_hex(origin, HEX_RADIUS * 0.3, color);
-        }
-    }
-
-    fn draw_hex(position: CubicVector, radius: f32, color: (f32, f32, f32)) {
+impl DemoGraphics for RhombusViewer {
+    fn draw_hex(&self, position: CubicVector, radius_ratio: f32, color: Color) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
 
-        let big = radius * HEX_RADIUS_RATIO;
-        let small = radius * HEX_RADIUS_RATIO * f32::sqrt(3.0) / 2.0;
+        let radius = HEX_RADIUS * HEX_RADIUS_RATIO * radius_ratio;
+        let big = radius;
+        let small = radius * f32::sqrt(3.0) / 2.0;
 
         unsafe {
             gl::PushMatrix();
@@ -266,28 +196,17 @@ impl HexApp {
         }
     }
 
-    fn draw_dodec_direction(
-        mut origin: QuadricVector,
-        direction: usize,
-        length: usize,
-        color: (f32, f32, f32),
-    ) {
-        for _ in 0..length {
-            origin = origin.neighbor(direction);
-            Self::draw_dodec(origin, HEX_RADIUS * 0.3, color);
-        }
-    }
-
-    fn draw_dodec(position: QuadricVector, radius: f32, color: (f32, f32, f32)) {
+    fn draw_dodec(&self, position: QuadricVector, radius_ratio: f32, color: Color) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
         let depth = position.t();
 
-        let big = radius * HEX_RADIUS_RATIO;
-        let small = radius * HEX_RADIUS_RATIO * f32::sqrt(3.0) / 2.0;
-        let small2 = radius * HEX_RADIUS_RATIO / (2.0 * f32::sqrt(2.0));
+        let radius = HEX_RADIUS * HEX_RADIUS_RATIO * radius_ratio;
+        let big = radius;
+        let small = radius * f32::sqrt(3.0) / 2.0;
+        let small2 = radius / (2.0 * f32::sqrt(2.0));
         // Fun fact: those two values are analytically identical.
-        //let big2 = small2 + radius * HEX_RADIUS_RATIO / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
+        //let big2 = small2 + radius / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
         let big2 = (small2 + big) / 2.0;
 
         unsafe {
@@ -392,7 +311,7 @@ fn resize(width: f64, height: f64) {
 }
 
 fn main() {
-    let mut app = HexApp::new(QuadricVector::new(0, 0, 0, 0));
+    let mut app = RhombusViewer::new(QuadricVector::new(0, 0, 0, 0));
 
     let mut window: GlutinWindow = WindowSettings::new("Rhombus Viewer", [WIDTH, HEIGHT])
         .graphics_api(OpenGL::V2_1)
@@ -419,11 +338,11 @@ fn main() {
             let duration = Instant::now().duration_since(start_time);
             duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
         };
-        let adv = (now_millis - prev_millis + (prev_millis % 100)) / 100;
+        let adv_millis = now_millis - prev_millis;
         prev_millis = now_millis;
 
-        if adv > 0 {
-            app.advance(adv);
+        if adv_millis > 0 {
+            app.advance(adv_millis);
         }
 
         if let Some(_args) = event.render_args() {
@@ -431,8 +350,7 @@ fn main() {
                 gl::Clear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
                 gl::LoadIdentity();
             }
-            glu::look_at(-40.0, -60.0, 100.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-            app.draw_axes();
+            glu::look_at(-20.0, -30.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
             app.draw();
         }
 
