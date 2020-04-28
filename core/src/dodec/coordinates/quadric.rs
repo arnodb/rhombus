@@ -159,10 +159,12 @@ struct SphereRingIter {
 impl SphereRingIter {
     fn new(edge_lengths: [usize; 2], next: QuadricVector) -> Self {
         let mut direction = 0;
-        if edge_lengths[0] > 0 || edge_lengths[1] > 0 {
-            while direction < 6 && edge_lengths[direction & 1] == 0 {
-                direction += 1;
-            }
+        // Drain all but last edge so that:
+        //     - the state is ready for next iteration
+        //     - the ring of size 0 case is handled correctly (it returns
+        //       the first value, and no more then)
+        while direction < 5 && edge_lengths[direction & 1] == 0 {
+            direction += 1;
         }
         Self {
             edge_lengths,
