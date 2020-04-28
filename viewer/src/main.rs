@@ -3,6 +3,7 @@ use crate::demo::dodec::directions::DodecDirectionsDemo;
 use crate::demo::dodec::snake::DodecSnakeDemo;
 use crate::demo::dodec::sphere::DodecSphereDemo;
 use crate::demo::hex::directions::HexDirectionsDemo;
+use crate::demo::hex::flat_builder::HexFlatBuilderDemo;
 use crate::demo::hex::ring::HexRingDemo;
 use crate::demo::hex::snake::HexSnakeDemo;
 use crate::demo::{Demo, DemoGraphics};
@@ -25,7 +26,7 @@ const HEIGHT: u32 = 480;
 const HEX_RADIUS: f32 = 1.0;
 const HEX_RADIUS_RATIO: f32 = 0.8;
 
-const NUM_DEMOS: usize = 6;
+const MAX_ROTATED_DEMOS: usize = 6;
 
 const DEMO_HEX_DIRECTIONS: usize = 0;
 const DEMO_HEX_RING: usize = 1;
@@ -34,6 +35,8 @@ const DEMO_DODEC_DIRECTIONS: usize = 3;
 const DEMO_DODEC_SPHERE: usize = 4;
 const DEMO_DODEC_SNAKE: usize = 5;
 
+const HEX_FLAT_BUILDER: usize = 100;
+
 enum RhombusViewerDemo {
     HexDirections(HexDirectionsDemo),
     HexRing(HexRingDemo),
@@ -41,6 +44,7 @@ enum RhombusViewerDemo {
     DodecDirections(DodecDirectionsDemo),
     DodecSphere(DodecSphereDemo),
     DodecSnake(DodecSnakeDemo),
+    HexFlatBuilder(HexFlatBuilderDemo),
 }
 
 impl RhombusViewerDemo {
@@ -52,6 +56,7 @@ impl RhombusViewerDemo {
             Self::DodecDirections(demo) => demo.advance(millis),
             Self::DodecSphere(demo) => demo.advance(millis),
             Self::DodecSnake(demo) => demo.advance(millis),
+            Self::HexFlatBuilder(demo) => demo.advance(millis),
         }
     }
 
@@ -63,6 +68,19 @@ impl RhombusViewerDemo {
             Self::DodecDirections(demo) => demo.draw(graphics),
             Self::DodecSphere(demo) => demo.draw(graphics),
             Self::DodecSnake(demo) => demo.draw(graphics),
+            Self::HexFlatBuilder(demo) => demo.draw(graphics),
+        }
+    }
+
+    fn handle_button_args(&mut self, args: &ButtonArgs) {
+        match self {
+            Self::HexDirections(demo) => demo.handle_button_args(args),
+            Self::HexRing(demo) => demo.handle_button_args(args),
+            Self::HexSnake(demo) => demo.handle_button_args(args),
+            Self::DodecDirections(demo) => demo.handle_button_args(args),
+            Self::DodecSphere(demo) => demo.handle_button_args(args),
+            Self::DodecSnake(demo) => demo.handle_button_args(args),
+            Self::HexFlatBuilder(demo) => demo.handle_button_args(args),
         }
     }
 }
@@ -97,6 +115,7 @@ impl RhombusViewer {
 
     fn new_demo(demo_num: usize, position: QuadricVector) -> RhombusViewerDemo {
         match demo_num {
+            // Simple demos
             DEMO_HEX_DIRECTIONS => RhombusViewerDemo::HexDirections(HexDirectionsDemo::new(
                 CubicVector::new(position.x(), position.y(), position.z()),
             )),
@@ -115,6 +134,10 @@ impl RhombusViewer {
             }
             DEMO_DODEC_SPHERE => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
             DEMO_DODEC_SNAKE => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
+            // Flat builders
+            HEX_FLAT_BUILDER => RhombusViewerDemo::HexFlatBuilder(HexFlatBuilderDemo::new(
+                CubicVector::new(position.x(), position.y(), position.z()),
+            )),
             _ => unreachable!(),
         }
     }
@@ -133,7 +156,7 @@ impl RhombusViewer {
                     *last_millis += millis;
                     self.demo.advance(millis);
                 } else {
-                    let next_demo_num = (*demo_num + 1) % NUM_DEMOS;
+                    let next_demo_num = (*demo_num + 1) % MAX_ROTATED_DEMOS;
                     self.demo = Self::new_demo(next_demo_num, self.position);
                     *last_millis = 0;
                     *demo_num = next_demo_num;
@@ -180,6 +203,10 @@ impl RhombusViewer {
             gl::End();
         }
     }
+
+    fn handle_button_args(&mut self, args: &ButtonArgs) {
+        self.demo.handle_button_args(args);
+    }
 }
 
 impl DemoGraphics for RhombusViewer {
@@ -208,6 +235,34 @@ impl DemoGraphics for RhombusViewer {
             gl::Vertex3f(0.0, -big, 0.0);
             gl::Vertex3f(-small, -big / 2.0, 0.0);
             gl::Vertex3f(-small, big / 2.0, 0.0);
+            gl::End();
+
+            gl::PopMatrix();
+        }
+    }
+
+    fn draw_hex_arrow(&self, from: CubicVector, rotation_z: f32, color: Color) {
+        let col = from.x() + (from.z() - (from.z() & 1)) / 2;
+        let row = from.z();
+
+        let small = HEX_RADIUS * f32::sqrt(3.0) / 2.0;
+
+        unsafe {
+            gl::PushMatrix();
+
+            gl::Translatef(
+                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
+                -HEX_RADIUS * row as f32 * 1.5,
+                0.0,
+            );
+            gl::Rotatef(rotation_z, 0.0, 0.0, 1.0);
+
+            gl::Begin(gl::GL_TRIANGLE_FAN);
+            Self::set_color(color);
+            gl::Vertex3f(small - 0.1, 0.0, 0.0);
+            gl::Vertex3f(small - 0.3, HEX_RADIUS * 0.3, 0.0);
+            gl::Vertex3f(small + 0.3, 0.0, 0.0);
+            gl::Vertex3f(small - 0.3, -HEX_RADIUS * 0.3, 0.0);
             gl::End();
 
             gl::PopMatrix();
@@ -342,6 +397,9 @@ enum DemoOption {
     DodecSphere = DEMO_DODEC_SPHERE as isize,
     #[structopt(name = "dodec-snake")]
     DodecSnake = DEMO_DODEC_SNAKE as isize,
+
+    #[structopt(name = "hex-flat-builder")]
+    HexFlatBuilder = HEX_FLAT_BUILDER as isize,
 }
 
 #[derive(StructOpt, Debug)]
@@ -402,6 +460,10 @@ fn main() {
             let width = args.draw_size[0] as f64;
             let height = args.draw_size[1] as f64;
             resize(width, height);
+        }
+
+        if let Some(args) = event.button_args() {
+            app.handle_button_args(&args);
         }
     }
 }

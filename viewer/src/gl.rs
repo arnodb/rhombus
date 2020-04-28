@@ -8,6 +8,7 @@ pub const GL_COLOR_BUFFER_BIT: u32 = 0x4000;
 pub const GL_LINES: u32 = 0x0001;
 pub const GL_LINE_LOOP: u32 = 0x0002;
 //pub const GL_LINE_STRIP: u32 = 0x0003;
+pub const GL_TRIANGLE_FAN: u32 = 0x0006;
 
 // Enable
 pub const GL_DEPTH_TEST: u32 = 0x0B71;
