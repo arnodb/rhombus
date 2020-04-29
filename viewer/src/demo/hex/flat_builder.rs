@@ -91,6 +91,10 @@ impl Demo for HexFlatBuilderDemo {
                                         | (_, _, Some(HexState::Open)) => {
                                             self.wallize(ahead);
                                         }
+                                        (_, Some(HexState::Open), _) => {
+                                            self.wallize(ahead_left);
+                                            self.wallize(ahead_right);
+                                        }
                                         _ => {}
                                     }
                                 }
