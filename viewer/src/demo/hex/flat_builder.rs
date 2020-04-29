@@ -1,4 +1,4 @@
-use crate::color::{DARK_RED, GREY, WHITE};
+use crate::color::{DARK_RED, GREEN, GREY, RED, WHITE};
 use crate::demo::{Demo, DemoGraphics};
 use piston_window::{Button, ButtonArgs, ButtonState, Key};
 use rhombus_core::hex::coordinates::axial::AxialVector;
@@ -52,7 +52,15 @@ impl Demo for HexFlatBuilderDemo {
                 }
             }
         }
-        graphics.draw_hex_arrow(self.position, 60.0 * self.direction as f32, WHITE)
+        let ahead = self
+            .world
+            .get(&Self::to_world_key(self.position.neighbor(self.direction)));
+        let color = match ahead {
+            Some(HexState::Wall) => RED,
+            Some(HexState::Open) => WHITE,
+            None => GREEN,
+        };
+        graphics.draw_hex_arrow(self.position, 60.0 * self.direction as f32, color)
     }
 
     fn handle_button_args(&mut self, args: &ButtonArgs) {
