@@ -48,39 +48,27 @@ enum RhombusViewerDemo {
 }
 
 impl RhombusViewerDemo {
-    fn advance(&mut self, millis: u64) {
+    fn demo(&self) -> &dyn Demo {
         match self {
-            Self::HexDirections(demo) => demo.advance(millis),
-            Self::HexRing(demo) => demo.advance(millis),
-            Self::HexSnake(demo) => demo.advance(millis),
-            Self::DodecDirections(demo) => demo.advance(millis),
-            Self::DodecSphere(demo) => demo.advance(millis),
-            Self::DodecSnake(demo) => demo.advance(millis),
-            Self::HexFlatBuilder(demo) => demo.advance(millis),
+            Self::HexDirections(demo) => demo,
+            Self::HexRing(demo) => demo,
+            Self::HexSnake(demo) => demo,
+            Self::DodecDirections(demo) => demo,
+            Self::DodecSphere(demo) => demo,
+            Self::DodecSnake(demo) => demo,
+            Self::HexFlatBuilder(demo) => demo,
         }
     }
 
-    fn draw(&self, graphics: &dyn DemoGraphics) {
+    fn demo_mut(&mut self) -> &mut dyn Demo {
         match self {
-            Self::HexDirections(demo) => demo.draw(graphics),
-            Self::HexRing(demo) => demo.draw(graphics),
-            Self::HexSnake(demo) => demo.draw(graphics),
-            Self::DodecDirections(demo) => demo.draw(graphics),
-            Self::DodecSphere(demo) => demo.draw(graphics),
-            Self::DodecSnake(demo) => demo.draw(graphics),
-            Self::HexFlatBuilder(demo) => demo.draw(graphics),
-        }
-    }
-
-    fn handle_button_args(&mut self, args: &ButtonArgs) {
-        match self {
-            Self::HexDirections(demo) => demo.handle_button_args(args),
-            Self::HexRing(demo) => demo.handle_button_args(args),
-            Self::HexSnake(demo) => demo.handle_button_args(args),
-            Self::DodecDirections(demo) => demo.handle_button_args(args),
-            Self::DodecSphere(demo) => demo.handle_button_args(args),
-            Self::DodecSnake(demo) => demo.handle_button_args(args),
-            Self::HexFlatBuilder(demo) => demo.handle_button_args(args),
+            Self::HexDirections(demo) => demo,
+            Self::HexRing(demo) => demo,
+            Self::HexSnake(demo) => demo,
+            Self::DodecDirections(demo) => demo,
+            Self::DodecSphere(demo) => demo,
+            Self::DodecSnake(demo) => demo,
+            Self::HexFlatBuilder(demo) => demo,
         }
     }
 }
@@ -146,7 +134,7 @@ impl RhombusViewer {
         match &mut self.animation {
             RhombusViewerAnimation::Fixed { last_millis, .. } => {
                 *last_millis += millis;
-                self.demo.advance(millis);
+                self.demo.demo_mut().advance(millis);
             }
             RhombusViewerAnimation::Rotating {
                 last_millis,
@@ -154,7 +142,7 @@ impl RhombusViewer {
             } => {
                 if *last_millis + millis <= 5000 {
                     *last_millis += millis;
-                    self.demo.advance(millis);
+                    self.demo.demo_mut().advance(millis);
                 } else {
                     let next_demo_num = (*demo_num + 1) % MAX_ROTATED_DEMOS;
                     self.demo = Self::new_demo(next_demo_num, self.position);
@@ -173,7 +161,7 @@ impl RhombusViewer {
             self.draw_hex(p2d, 1.0, WHITE);
             self.draw_dodec(position, 1.0, GREY);
         }
-        self.demo.draw(self);
+        self.demo.demo().draw(self);
     }
 
     fn set_color(color: Color) {
@@ -205,7 +193,7 @@ impl RhombusViewer {
     }
 
     fn handle_button_args(&mut self, args: &ButtonArgs) {
-        self.demo.handle_button_args(args);
+        self.demo.demo_mut().handle_button_args(args);
     }
 }
 
