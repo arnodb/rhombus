@@ -15,9 +15,26 @@ pub trait Demo {
 }
 
 pub trait DemoGraphics {
-    fn draw_hex(&self, position: CubicVector, radius_ratio: f32, color: Color);
+    fn draw_hex(&self, position: CubicVector, radius_ratio: f32, color: Color) {
+        self.draw_hex_translate(position, (0.0, 0.0, 0.0), radius_ratio, color)
+    }
 
-    fn draw_hex_arrow(&self, from: CubicVector, rotation_z: f32, color: Color);
+    fn draw_hex_translate(
+        &self,
+        position: CubicVector,
+        translation: (f32, f32, f32),
+        radius_ratio: f32,
+        color: Color,
+    );
+
+    fn draw_hex_arrow(
+        &self,
+        from: CubicVector,
+        rotation_z: f32,
+        translation: (f32, f32, f32),
+        rotation: (f32, f32, f32, f32),
+        color: Color,
+    );
 
     fn draw_dodec(&self, position: QuadricVector, radius_ratio: f32, color: Color);
 }

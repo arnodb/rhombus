@@ -60,7 +60,13 @@ impl Demo for HexFlatBuilderDemo {
             Some(HexState::Open) => WHITE,
             None => GREEN,
         };
-        graphics.draw_hex_arrow(self.position, 60.0 * self.direction as f32, color)
+        graphics.draw_hex_arrow(
+            self.position,
+            60.0 * self.direction as f32,
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0, 0.0),
+            color,
+        );
     }
 
     fn handle_button_args(&mut self, args: &ButtonArgs) {

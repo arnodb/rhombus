@@ -2,6 +2,7 @@ use crate::color::{Color, BLUE, DARK_BLUE, DARK_GREEN, DARK_RED, GREEN, GREY, RE
 use crate::demo::dodec::directions::DodecDirectionsDemo;
 use crate::demo::dodec::snake::DodecSnakeDemo;
 use crate::demo::dodec::sphere::DodecSphereDemo;
+use crate::demo::hex::bumpy_builder::HexBumpyBuilderDemo;
 use crate::demo::hex::directions::HexDirectionsDemo;
 use crate::demo::hex::flat_builder::HexFlatBuilderDemo;
 use crate::demo::hex::ring::HexRingDemo;
@@ -36,6 +37,7 @@ const DEMO_DODEC_SPHERE: usize = 4;
 const DEMO_DODEC_SNAKE: usize = 5;
 
 const HEX_FLAT_BUILDER: usize = 100;
+const HEX_BUMPY_BUILDER: usize = 101;
 
 enum RhombusViewerDemo {
     HexDirections(HexDirectionsDemo),
@@ -45,6 +47,7 @@ enum RhombusViewerDemo {
     DodecSphere(DodecSphereDemo),
     DodecSnake(DodecSnakeDemo),
     HexFlatBuilder(HexFlatBuilderDemo),
+    HexBumpyBuilder(HexBumpyBuilderDemo),
 }
 
 impl RhombusViewerDemo {
@@ -57,6 +60,7 @@ impl RhombusViewerDemo {
             Self::DodecSphere(demo) => demo,
             Self::DodecSnake(demo) => demo,
             Self::HexFlatBuilder(demo) => demo,
+            Self::HexBumpyBuilder(demo) => demo,
         }
     }
 
@@ -69,6 +73,7 @@ impl RhombusViewerDemo {
             Self::DodecSphere(demo) => demo,
             Self::DodecSnake(demo) => demo,
             Self::HexFlatBuilder(demo) => demo,
+            Self::HexBumpyBuilder(demo) => demo,
         }
     }
 }
@@ -122,8 +127,12 @@ impl RhombusViewer {
             }
             DEMO_DODEC_SPHERE => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
             DEMO_DODEC_SNAKE => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
-            // Flat builders
+            // Flat hex builders
             HEX_FLAT_BUILDER => RhombusViewerDemo::HexFlatBuilder(HexFlatBuilderDemo::new(
+                CubicVector::new(position.x(), position.y(), position.z()),
+            )),
+            // Bumpy hex builders
+            HEX_BUMPY_BUILDER => RhombusViewerDemo::HexBumpyBuilder(HexBumpyBuilderDemo::new(
                 CubicVector::new(position.x(), position.y(), position.z()),
             )),
             _ => unreachable!(),
@@ -198,7 +207,13 @@ impl RhombusViewer {
 }
 
 impl DemoGraphics for RhombusViewer {
-    fn draw_hex(&self, position: CubicVector, radius_ratio: f32, color: Color) {
+    fn draw_hex_translate(
+        &self,
+        position: CubicVector,
+        translation: (f32, f32, f32),
+        radius_ratio: f32,
+        color: Color,
+    ) {
         let col = position.x() + (position.z() - (position.z() & 1)) / 2;
         let row = position.z();
 
@@ -214,6 +229,7 @@ impl DemoGraphics for RhombusViewer {
                 -HEX_RADIUS * row as f32 * 1.5,
                 0.0,
             );
+            gl::Translatef(translation.0, translation.1, translation.2);
 
             gl::Begin(gl::GL_LINE_LOOP);
             Self::set_color(color);
@@ -229,7 +245,14 @@ impl DemoGraphics for RhombusViewer {
         }
     }
 
-    fn draw_hex_arrow(&self, from: CubicVector, rotation_z: f32, color: Color) {
+    fn draw_hex_arrow(
+        &self,
+        from: CubicVector,
+        rotation_z: f32,
+        translation: (f32, f32, f32),
+        rotation: (f32, f32, f32, f32),
+        color: Color,
+    ) {
         let col = from.x() + (from.z() - (from.z() & 1)) / 2;
         let row = from.z();
 
@@ -244,6 +267,8 @@ impl DemoGraphics for RhombusViewer {
                 0.0,
             );
             gl::Rotatef(rotation_z, 0.0, 0.0, 1.0);
+            gl::Translatef(translation.0, translation.1, translation.2);
+            gl::Rotatef(rotation.0, rotation.1, rotation.2, rotation.3);
 
             gl::Begin(gl::GL_TRIANGLE_FAN);
             Self::set_color(color);
@@ -388,6 +413,8 @@ enum DemoOption {
 
     #[structopt(name = "hex-flat-builder")]
     HexFlatBuilder = HEX_FLAT_BUILDER as isize,
+    #[structopt(name = "hex-bumpy-builder")]
+    HexBumpyBuilder = HEX_BUMPY_BUILDER as isize,
 }
 
 #[derive(StructOpt, Debug)]
