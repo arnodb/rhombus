@@ -38,7 +38,7 @@ impl SimpleState for HexRingDemo {
 
         for radius in &self.rings {
             for hex in self.position.ring_iter(*radius) {
-                let pos = hex.into();
+                let pos = (hex, 0.0).into();
                 let mut transform = Transform::default();
                 transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
                 CubicPositionSystem::transform(pos, &mut transform);

@@ -5,18 +5,29 @@ pub struct CubicPositionSystem;
 
 impl CubicPositionSystem {
     pub fn transform(position: CubicPosition, transform: &mut Transform) {
-        let col = position.0.x() + (position.0.z() - (position.0.z() & 1)) / 2;
-        let row = position.0.z();
+        let col = position.pos().x() + (position.pos().z() - (position.pos().z() & 1)) / 2;
+        let row = position.pos().z();
+        let altitude = position.alt();
         transform.set_translation_xyz(
             f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
             -row as f32 * 1.5,
-            0.0,
+            altitude,
         );
     }
 }
 
 #[derive(Debug, Clone, Copy, From)]
-pub struct CubicPosition(CubicVector);
+pub struct CubicPosition(CubicVector, f32);
+
+impl CubicPosition {
+    fn pos(&self) -> &CubicVector {
+        &self.0
+    }
+
+    fn alt(&self) -> f32 {
+        self.1
+    }
+}
 
 impl Component for CubicPosition {
     type Storage = DenseVecStorage<Self>;

@@ -36,7 +36,7 @@ impl HexDirectionsDemo {
         let mut origin = self.position;
         for _ in 0..length {
             origin = origin.neighbor(direction);
-            let pos = origin.into();
+            let pos = (origin, 0.0).into();
             let mut transform = Transform::default();
             transform.set_scale(Vector3::new(0.3, 0.3, 1.0));
             CubicPositionSystem::transform(pos, &mut transform);

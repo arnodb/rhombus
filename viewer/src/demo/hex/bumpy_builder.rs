@@ -59,8 +59,9 @@ impl HexBumpyBuilderDemo {
         data: &mut StateData<'_, GameData<'_, '_>>,
         assets: &Arc<RhombusViewerAssets>,
         position: CubicVector,
+        floor: isize,
     ) -> Entity {
-        let pos = position.into();
+        let pos = (position, floor as f32).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.8, 2.0));
         CubicPositionSystem::transform(pos, &mut transform);
@@ -79,8 +80,9 @@ impl HexBumpyBuilderDemo {
         data: &mut StateData<'_, GameData<'_, '_>>,
         assets: &Arc<RhombusViewerAssets>,
         position: CubicVector,
+        ceiling: isize,
     ) -> Entity {
-        let pos = position.into();
+        let pos = (position, ceiling as f32).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.9, 0.9, 1.0));
         CubicPositionSystem::transform(pos, &mut transform);
@@ -110,8 +112,8 @@ impl SimpleState for HexBumpyBuilderDemo {
         vblock.insert(VerticalBlock {
             floor: 0,
             ceiling: BLOCK_HEIGHT,
-            floor_entity: Self::create_floor(&mut data, &assets, self.position),
-            ceiling_entity: Self::create_ceiling(&mut data, &assets, self.position),
+            floor_entity: Self::create_floor(&mut data, &assets, self.position, 0),
+            ceiling_entity: Self::create_ceiling(&mut data, &assets, self.position, BLOCK_HEIGHT),
         });
     }
 
@@ -205,8 +207,15 @@ impl SimpleState for HexBumpyBuilderDemo {
                             vblock.insert(VerticalBlock {
                                 floor: next_floor,
                                 ceiling: next_ceiling,
-                                floor_entity: Self::create_floor(&mut data, &assets, next_pos),
-                                ceiling_entity: Self::create_ceiling(&mut data, &assets, next_pos),
+                                floor_entity: Self::create_floor(
+                                    &mut data, &assets, next_pos, next_floor,
+                                ),
+                                ceiling_entity: Self::create_ceiling(
+                                    &mut data,
+                                    &assets,
+                                    next_pos,
+                                    next_ceiling,
+                                ),
                             });
                             self.position = next_pos;
                             self.height = next_floor;

@@ -48,7 +48,7 @@ impl HexFlatBuilderDemo {
         assets: &Arc<RhombusViewerAssets>,
         position: CubicVector,
     ) -> Entity {
-        let pos = position.into();
+        let pos = (position, 0.0).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
         CubicPositionSystem::transform(pos, &mut transform);
@@ -68,7 +68,7 @@ impl HexFlatBuilderDemo {
         assets: &Arc<RhombusViewerAssets>,
         position: CubicVector,
     ) -> Entity {
-        let pos = position.into();
+        let pos = (position, 0.2).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.8, 3.0));
         CubicPositionSystem::transform(pos, &mut transform);
