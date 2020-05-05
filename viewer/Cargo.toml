@@ -5,10 +5,7 @@ authors = ["Arnaud de Bossoreille <arnaud.debossoreille@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+derive_more = "0.99"
+amethyst = { version = "0.15", features = ["vulkan"] }
 rhombus_core = { path = "../core"}
-piston_window = "0.107"
-pistoncore-glutin_window = "0.63"
 structopt = "0.3"
-
-[build-dependencies]
-gl_generator = "0.14"

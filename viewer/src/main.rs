@@ -1,31 +1,54 @@
-use crate::color::{Color, BLUE, DARK_BLUE, DARK_GREEN, DARK_RED, GREEN, GREY, RED, WHITE};
-use crate::demo::dodec::directions::DodecDirectionsDemo;
-use crate::demo::dodec::snake::DodecSnakeDemo;
-use crate::demo::dodec::sphere::DodecSphereDemo;
-use crate::demo::hex::bumpy_builder::HexBumpyBuilderDemo;
+#[macro_use]
+extern crate derive_more;
+
+use crate::demo::dodec::{
+    directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo,
+};
+//use crate::demo::hex::bumpy_builder::HexBumpyBuilderDemo;
 use crate::demo::hex::directions::HexDirectionsDemo;
-use crate::demo::hex::flat_builder::HexFlatBuilderDemo;
-use crate::demo::hex::ring::HexRingDemo;
-use crate::demo::hex::snake::HexSnakeDemo;
-use crate::demo::{Demo, DemoGraphics};
-use glutin_window::GlutinWindow;
-use piston_window::*;
-use rhombus_core::dodec::coordinates::quadric::QuadricVector;
-use rhombus_core::hex::coordinates::cubic::CubicVector;
-use std::time::Instant;
+//use crate::demo::hex::flat_builder::HexFlatBuilderDemo;
+use crate::{
+    demo::{
+        hex::{ring::HexRingDemo, snake::HexSnakeDemo},
+        Color, ColorData, RhombusViewerAssets,
+    },
+    system::{cubic::CubicPositionSystem, quadric::QuadricPositionSystem},
+};
+use amethyst::{
+    assets::{AssetLoaderSystemData, ProgressCounter},
+    core::{
+        math::Vector3,
+        timing::Time,
+        transform::{Transform, TransformBundle},
+    },
+    input::is_key_down,
+    prelude::*,
+    renderer::{
+        camera::{Camera, Perspective, Projection},
+        debug_drawing::DebugLinesComponent,
+        formats::mesh::ObjFormat,
+        light::{Light, PointLight},
+        palette::{Srgb, Srgba},
+        plugins::RenderToWindow,
+        rendy::texture::palette::load_from_srgba,
+        types::{DefaultBackend, Mesh, Texture},
+        Material, MaterialDefaults, RenderShaded3D, RenderingBundle,
+    },
+    utils::application_root_dir,
+    winit::VirtualKeyCode,
+    Application, GameDataBuilder, SimpleState, StateEvent,
+};
+use rhombus_core::{
+    dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
+};
+use std::{collections::HashMap, sync::Arc};
 use structopt::StructOpt;
 
-mod gl;
-mod glu;
-
-mod color;
 mod demo;
+mod system;
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
-
-const HEX_RADIUS: f32 = 1.0;
-const HEX_RADIUS_RATIO: f32 = 0.8;
 
 const MAX_ROTATED_DEMOS: usize = 6;
 
@@ -39,54 +62,16 @@ const DEMO_DODEC_SNAKE: usize = 5;
 const HEX_FLAT_BUILDER: usize = 100;
 const HEX_BUMPY_BUILDER: usize = 101;
 
-enum RhombusViewerDemo {
-    HexDirections(HexDirectionsDemo),
-    HexRing(HexRingDemo),
-    HexSnake(HexSnakeDemo),
-    DodecDirections(DodecDirectionsDemo),
-    DodecSphere(DodecSphereDemo),
-    DodecSnake(DodecSnakeDemo),
-    HexFlatBuilder(HexFlatBuilderDemo),
-    HexBumpyBuilder(HexBumpyBuilderDemo),
-}
-
-impl RhombusViewerDemo {
-    fn demo(&self) -> &dyn Demo {
-        match self {
-            Self::HexDirections(demo) => demo,
-            Self::HexRing(demo) => demo,
-            Self::HexSnake(demo) => demo,
-            Self::DodecDirections(demo) => demo,
-            Self::DodecSphere(demo) => demo,
-            Self::DodecSnake(demo) => demo,
-            Self::HexFlatBuilder(demo) => demo,
-            Self::HexBumpyBuilder(demo) => demo,
-        }
-    }
-
-    fn demo_mut(&mut self) -> &mut dyn Demo {
-        match self {
-            Self::HexDirections(demo) => demo,
-            Self::HexRing(demo) => demo,
-            Self::HexSnake(demo) => demo,
-            Self::DodecDirections(demo) => demo,
-            Self::DodecSphere(demo) => demo,
-            Self::DodecSnake(demo) => demo,
-            Self::HexFlatBuilder(demo) => demo,
-            Self::HexBumpyBuilder(demo) => demo,
-        }
-    }
-}
-
 enum RhombusViewerAnimation {
-    Fixed { last_millis: u64 },
-    Rotating { last_millis: u64, demo_num: usize },
+    Fixed { demo_num: usize },
+    Rotating { demo_num: usize },
 }
 
 struct RhombusViewer {
     position: QuadricVector,
-    demo: RhombusViewerDemo,
     animation: RhombusViewerAnimation,
+    last_resume_time: f64,
+    progress_counter: ProgressCounter,
 }
 
 impl RhombusViewer {
@@ -94,305 +79,216 @@ impl RhombusViewer {
         let first_demo_num = demo_num.unwrap_or(0);
         Self {
             position,
-            demo: Self::new_demo(first_demo_num, position),
             animation: if demo_num.is_some() {
-                RhombusViewerAnimation::Fixed { last_millis: 0 }
+                RhombusViewerAnimation::Fixed {
+                    demo_num: first_demo_num,
+                }
             } else {
                 RhombusViewerAnimation::Rotating {
-                    last_millis: 0,
                     demo_num: first_demo_num,
                 }
             },
+            last_resume_time: 0.0,
+            progress_counter: ProgressCounter::default(),
         }
     }
 
-    fn new_demo(demo_num: usize, position: QuadricVector) -> RhombusViewerDemo {
-        match demo_num {
+    fn transition(demo_num: usize, position: QuadricVector) -> SimpleTrans {
+        let new_state: Box<dyn State<GameData<'static, 'static>, StateEvent>> = match demo_num {
             // Simple demos
-            DEMO_HEX_DIRECTIONS => RhombusViewerDemo::HexDirections(HexDirectionsDemo::new(
-                CubicVector::new(position.x(), position.y(), position.z()),
-            )),
-            DEMO_HEX_RING => RhombusViewerDemo::HexRing(HexRingDemo::new(CubicVector::new(
+            DEMO_HEX_DIRECTIONS => Box::new(HexDirectionsDemo::new(CubicVector::new(
                 position.x(),
                 position.y(),
                 position.z(),
             ))),
-            DEMO_HEX_SNAKE => RhombusViewerDemo::HexSnake(HexSnakeDemo::new(CubicVector::new(
+            DEMO_HEX_RING => Box::new(HexRingDemo::new(CubicVector::new(
                 position.x(),
                 position.y(),
                 position.z(),
             ))),
-            DEMO_DODEC_DIRECTIONS => {
-                RhombusViewerDemo::DodecDirections(DodecDirectionsDemo::new(position))
-            }
-            DEMO_DODEC_SPHERE => RhombusViewerDemo::DodecSphere(DodecSphereDemo::new(position)),
-            DEMO_DODEC_SNAKE => RhombusViewerDemo::DodecSnake(DodecSnakeDemo::new(position)),
+            DEMO_HEX_SNAKE => Box::new(HexSnakeDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
+            DEMO_DODEC_DIRECTIONS => Box::new(DodecDirectionsDemo::new(position)),
+            DEMO_DODEC_SPHERE => Box::new(DodecSphereDemo::new(position)),
+            DEMO_DODEC_SNAKE => Box::new(DodecSnakeDemo::new(position)),
+            /*
             // Flat hex builders
-            HEX_FLAT_BUILDER => RhombusViewerDemo::HexFlatBuilder(HexFlatBuilderDemo::new(
-                CubicVector::new(position.x(), position.y(), position.z()),
-            )),
+            HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
             // Bumpy hex builders
-            HEX_BUMPY_BUILDER => RhombusViewerDemo::HexBumpyBuilder(HexBumpyBuilderDemo::new(
-                CubicVector::new(position.x(), position.y(), position.z()),
-            )),
-            _ => unreachable!(),
+            HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new(CubicVector::new(
+                position.x(),
+                position.y(),
+                position.z(),
+            ))),
+            */
+            _ => unimplemented!(),
+        };
+        Trans::Push(new_state)
+    }
+}
+
+impl SimpleState for RhombusViewer {
+    fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
+        self.last_resume_time = data
+            .world
+            .read_resource::<Time>()
+            .absolute_real_time_seconds();
+        {
+            let mut debug_lines_component = DebugLinesComponent::with_capacity(100);
+            debug_lines_component.add_direction(
+                [-1.0, 0.0, 0.0].into(),
+                [5.0, 0.0, 0.0].into(),
+                Srgba::new(0.5, 0.0, 0.0, 1.0),
+            );
+            debug_lines_component.add_direction(
+                [0.0, -1.0, 0.0].into(),
+                [0.0, 5.0, 0.0].into(),
+                Srgba::new(0.0, 0.5, 0.0, 1.0),
+            );
+            debug_lines_component.add_direction(
+                [0.0, 0.0, -1.0].into(),
+                [0.0, 0.0, 5.0].into(),
+                Srgba::new(0.0, 0.0, 0.5, 1.0),
+            );
+            data.world
+                .create_entity()
+                .with(debug_lines_component)
+                .build();
+        }
+        {
+            let hex_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
+                loader.load("mesh/hex.obj", ObjFormat, &mut self.progress_counter)
+            });
+            let mat_defaults = data.world.read_resource::<MaterialDefaults>().0.clone();
+            let color_data = [
+                (Color::Black, (0.0, 0.0, 0.0, 1.0)),
+                (Color::Red, (1.0, 0.0, 0.0, 1.0)),
+                (Color::Green, (0.0, 1.0, 0.0, 1.0)),
+                (Color::Blue, (0.0, 0.0, 1.0, 1.0)),
+                (Color::Yellow, (1.0, 1.0, 0.0, 1.0)),
+                (Color::Magenta, (1.0, 0.0, 1.0, 1.0)),
+                (Color::Cyan, (0.0, 1.0, 1.0, 1.0)),
+                (Color::White, (1.0, 1.0, 1.0, 1.0)),
+            ]
+            .iter()
+            .map(|(color, rgba)| {
+                let texture = data
+                    .world
+                    .exec(|loader: AssetLoaderSystemData<'_, Texture>| {
+                        loader.load_from_data(
+                            load_from_srgba(Srgba::new(rgba.0, rgba.1, rgba.2, rgba.3)).into(),
+                            &mut self.progress_counter,
+                        )
+                    });
+                let material = data
+                    .world
+                    .exec(|loader: AssetLoaderSystemData<'_, Material>| {
+                        loader.load_from_data(
+                            Material {
+                                albedo: texture.clone(),
+                                ..mat_defaults.clone()
+                            },
+                            &mut self.progress_counter,
+                        )
+                    });
+                (*color, ColorData { texture, material })
+            })
+            .collect::<HashMap<_, _>>();
+            data.world.insert(Arc::new(RhombusViewerAssets {
+                hex_handle,
+                color_data,
+            }));
+        }
+
+        let light: Light = PointLight {
+            intensity: 30.0,
+            color: Srgb::new(1.0, 1.0, 1.0),
+            radius: 5.0,
+            smoothness: 4.0,
+        }
+        .into();
+
+        let mut light_transform = Transform::default();
+        light_transform.set_translation_xyz(0.0, 0.0, 10.0);
+
+        data.world
+            .create_entity()
+            .with(light)
+            .with(light_transform)
+            .build();
+
+        let mut transform = Transform::default();
+        transform.append_translation_xyz(-6.0, -9.0, 15.0);
+        transform.face_towards(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+
+        let mut camera = Camera::standard_3d(WIDTH as f32, HEIGHT as f32);
+        camera.set_projection(Projection::Perspective(Perspective::new(
+            1.3,
+            std::f32::consts::FRAC_PI_4,
+            0.1,
+            2000.0,
+        )));
+
+        data.world
+            .create_entity()
+            .with(camera)
+            .with(transform)
+            .build();
+    }
+
+    fn on_resume(&mut self, data: StateData<'_, GameData<'_, '_>>) {
+        self.last_resume_time = data
+            .world
+            .read_resource::<Time>()
+            .absolute_real_time_seconds();
+    }
+
+    fn handle_event(
+        &mut self,
+        _: StateData<'_, GameData<'_, '_>>,
+        event: StateEvent,
+    ) -> SimpleTrans {
+        if let StateEvent::Window(event) = event {
+            if is_key_down(&event, VirtualKeyCode::Escape) {
+                Trans::Quit
+            } else {
+                Trans::None
+            }
+        } else {
+            Trans::None
         }
     }
 
-    fn advance(&mut self, millis: u64) {
-        match &mut self.animation {
-            RhombusViewerAnimation::Fixed { last_millis, .. } => {
-                *last_millis += millis;
-                self.demo.demo_mut().advance(millis);
-            }
-            RhombusViewerAnimation::Rotating {
-                last_millis,
-                demo_num,
-            } => {
-                if *last_millis + millis <= 5000 {
-                    *last_millis += millis;
-                    self.demo.demo_mut().advance(millis);
-                } else {
+    fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
+        let time = data
+            .world
+            .read_resource::<Time>()
+            .absolute_real_time_seconds();
+        if !self.progress_counter.is_complete() {
+            return Trans::None;
+        }
+        if time - self.last_resume_time > 1.0 {
+            match &mut self.animation {
+                RhombusViewerAnimation::Fixed { demo_num } => {
+                    Self::transition(*demo_num, self.position)
+                }
+                RhombusViewerAnimation::Rotating { demo_num } => {
+                    let trans = Self::transition(*demo_num, self.position);
                     let next_demo_num = (*demo_num + 1) % MAX_ROTATED_DEMOS;
-                    self.demo = Self::new_demo(next_demo_num, self.position);
-                    *last_millis = 0;
                     *demo_num = next_demo_num;
+                    trans
                 }
             }
+        } else {
+            Trans::None
         }
-    }
-
-    fn draw(&self) {
-        let position = self.position;
-        let p2d = CubicVector::new(position.x(), position.y(), position.z());
-        self.draw_axes();
-        if false {
-            self.draw_hex(p2d, 1.0, WHITE);
-            self.draw_dodec(position, 1.0, GREY);
-        }
-        self.demo.demo().draw(self);
-    }
-
-    fn set_color(color: Color) {
-        unsafe {
-            gl::Color3f(color.0, color.1, color.2);
-        }
-    }
-
-    fn draw_axes(&self) {
-        let length = 5.0;
-        unsafe {
-            gl::Begin(gl::GL_LINES);
-            Self::set_color(RED);
-            gl::Vertex3f(-length, 0.0, 0.0);
-            Self::set_color(DARK_RED);
-            gl::Vertex3f(length, 0.0, 0.0);
-
-            Self::set_color(GREEN);
-            gl::Vertex3f(0.0, -length, 0.0);
-            Self::set_color(DARK_GREEN);
-            gl::Vertex3f(0.0, length, 0.0);
-
-            Self::set_color(BLUE);
-            gl::Vertex3f(0.0, 0.0, -length);
-            Self::set_color(DARK_BLUE);
-            gl::Vertex3f(0.0, 0.0, length);
-            gl::End();
-        }
-    }
-
-    fn handle_button_args(&mut self, args: &ButtonArgs) {
-        self.demo.demo_mut().handle_button_args(args);
-    }
-}
-
-impl DemoGraphics for RhombusViewer {
-    fn draw_hex_translate(
-        &self,
-        position: CubicVector,
-        translation: (f32, f32, f32),
-        radius_ratio: f32,
-        color: Color,
-    ) {
-        let col = position.x() + (position.z() - (position.z() & 1)) / 2;
-        let row = position.z();
-
-        let radius = HEX_RADIUS * HEX_RADIUS_RATIO * radius_ratio;
-        let big = radius;
-        let small = radius * f32::sqrt(3.0) / 2.0;
-
-        unsafe {
-            gl::PushMatrix();
-
-            gl::Translatef(
-                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
-                -HEX_RADIUS * row as f32 * 1.5,
-                0.0,
-            );
-            gl::Translatef(translation.0, translation.1, translation.2);
-
-            gl::Begin(gl::GL_LINE_LOOP);
-            Self::set_color(color);
-            gl::Vertex3f(0.0, big, 0.0);
-            gl::Vertex3f(small, big / 2.0, 0.0);
-            gl::Vertex3f(small, -big / 2.0, 0.0);
-            gl::Vertex3f(0.0, -big, 0.0);
-            gl::Vertex3f(-small, -big / 2.0, 0.0);
-            gl::Vertex3f(-small, big / 2.0, 0.0);
-            gl::End();
-
-            gl::PopMatrix();
-        }
-    }
-
-    fn draw_hex_arrow(
-        &self,
-        from: CubicVector,
-        rotation_z: f32,
-        translation: (f32, f32, f32),
-        rotation: (f32, f32, f32, f32),
-        color: Color,
-    ) {
-        let col = from.x() + (from.z() - (from.z() & 1)) / 2;
-        let row = from.z();
-
-        let small = HEX_RADIUS * f32::sqrt(3.0) / 2.0;
-
-        unsafe {
-            gl::PushMatrix();
-
-            gl::Translatef(
-                HEX_RADIUS * f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
-                -HEX_RADIUS * row as f32 * 1.5,
-                0.0,
-            );
-            gl::Rotatef(rotation_z, 0.0, 0.0, 1.0);
-            gl::Translatef(translation.0, translation.1, translation.2);
-            gl::Rotatef(rotation.0, rotation.1, rotation.2, rotation.3);
-
-            gl::Begin(gl::GL_TRIANGLE_FAN);
-            Self::set_color(color);
-            gl::Vertex3f(small - 0.1, 0.0, 0.0);
-            gl::Vertex3f(small - 0.3, HEX_RADIUS * 0.3, 0.0);
-            gl::Vertex3f(small + 0.3, 0.0, 0.0);
-            gl::Vertex3f(small - 0.3, -HEX_RADIUS * 0.3, 0.0);
-            gl::End();
-
-            gl::PopMatrix();
-        }
-    }
-
-    fn draw_dodec(&self, position: QuadricVector, radius_ratio: f32, color: Color) {
-        let col = position.x() + (position.z() - (position.z() & 1)) / 2;
-        let row = position.z();
-        let depth = position.t();
-
-        let radius = HEX_RADIUS * HEX_RADIUS_RATIO * radius_ratio;
-        let big = radius;
-        let small = radius * f32::sqrt(3.0) / 2.0;
-        let small2 = radius / (2.0 * f32::sqrt(2.0));
-        // Fun fact: those two values are analytically identical.
-        //let big2 = small2 + radius / f32::tan(2.0 * f32::atan(1.0 / f32::sqrt(2.0)));
-        let big2 = (small2 + big) / 2.0;
-
-        unsafe {
-            gl::PushMatrix();
-
-            gl::Translatef(
-                HEX_RADIUS
-                    * f32::sqrt(3.0)
-                    * ((col as f32) + ((row & 1) as f32 + depth as f32) / 2.0),
-                -HEX_RADIUS * 1.5 * row as f32 - depth as f32 / 2.0,
-                -HEX_RADIUS * (1.0 + small2) * depth as f32,
-            );
-
-            let p_a = (0.0, 0.0, -big);
-
-            let p_b = (small, big / 2.0, -big2);
-            let p_c = (-small, big / 2.0, -big2);
-            let p_d = (0.0, -big, -big2);
-
-            let p_e = (0.0, big, -small2);
-            let p_f = (-small, -big / 2.0, -small2);
-            let p_g = (small, -big / 2.0, -small2);
-
-            let p_h = (small, big / 2.0, small2);
-            let p_i = (-small, big / 2.0, small2);
-            let p_j = (0.0, -big, small2);
-
-            let p_k = (0.0, big, big2);
-            let p_l = (-small, -big / 2.0, big2);
-            let p_m = (small, -big / 2.0, big2);
-
-            let p_n = (0.0, 0.0, big);
-
-            let lines = vec![
-                // -big -big2
-                (p_a, p_b),
-                (p_a, p_c),
-                (p_a, p_d),
-                // -big2 -small2
-                (p_b, p_e),
-                (p_b, p_g),
-                (p_c, p_e),
-                (p_c, p_f),
-                (p_d, p_f),
-                (p_d, p_g),
-                // -big2 small2
-                (p_b, p_h),
-                (p_c, p_i),
-                (p_d, p_j),
-                // -small2 big2
-                (p_e, p_k),
-                (p_f, p_l),
-                (p_g, p_m),
-                // small2 big2
-                (p_h, p_m),
-                (p_h, p_k),
-                (p_i, p_k),
-                (p_i, p_l),
-                (p_j, p_l),
-                (p_j, p_m),
-                // big2 big
-                (p_k, p_n),
-                (p_l, p_n),
-                (p_m, p_n),
-            ];
-
-            gl::Begin(gl::GL_LINES);
-            Self::set_color(color);
-            for (from, to) in lines {
-                gl::Vertex3f(from.0, from.1, from.2);
-                gl::Vertex3f(to.0, to.1, to.2);
-            }
-            gl::End();
-
-            gl::PopMatrix();
-        }
-    }
-}
-
-fn resize(width: f64, height: f64) {
-    let min = 2.0;
-    let (near_width, near_height) = if width > height {
-        (min * width / height, min)
-    } else {
-        (min, min * height / width)
-    };
-    unsafe {
-        gl::Viewport(0, 0, width as i32, height as i32);
-        gl::MatrixMode(gl::GL_PROJECTION);
-        gl::LoadIdentity();
-        gl::Frustum(
-            -near_width,
-            near_width,
-            -near_height,
-            near_height,
-            20.,
-            1000.,
-        );
-        gl::MatrixMode(gl::GL_MODELVIEW);
-        gl::LoadIdentity();
     }
 }
 
@@ -423,62 +319,38 @@ struct Options {
     demo: Option<DemoOption>,
 }
 
-fn main() {
+fn main() -> amethyst::Result<()> {
     let options = Options::from_args();
-    let mut app = RhombusViewer::new(
+
+    amethyst::start_logger(Default::default());
+
+    let app_root = application_root_dir()?;
+    let display_config_path = app_root.join("config/display.ron");
+    let assets_dir = app_root.join("assets/");
+
+    use amethyst::renderer::plugins::RenderDebugLines;
+    let game_data = GameDataBuilder::default()
+        .with_bundle(TransformBundle::new())?
+        .with(CubicPositionSystem, "cubic_position_system", &[])
+        .with(QuadricPositionSystem, "quadric_position_system", &[])
+        .with_bundle(
+            RenderingBundle::<DefaultBackend>::new()
+                .with_plugin(
+                    RenderToWindow::from_config_path(display_config_path)?
+                        .with_clear([0.05, 0.05, 0.05, 1.0]),
+                )
+                .with_plugin(RenderShaded3D::default())
+                .with_plugin(RenderDebugLines::default()),
+        )?;
+
+    let app = RhombusViewer::new(
         QuadricVector::new(0, 0, 0, 0),
         options.demo.map(|demo| demo as usize),
     );
 
-    let mut window: GlutinWindow = WindowSettings::new("Rhombus Viewer", [WIDTH, HEIGHT])
-        .graphics_api(OpenGL::V2_1)
-        .exit_on_esc(true)
-        .build()
-        .unwrap();
-    gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
+    let mut game = Application::new(assets_dir, app, game_data)?;
 
-    unsafe {
-        gl::Enable(gl::GL_DEPTH_TEST);
-        gl::LineWidth(2.);
-    }
+    game.run();
 
-    let Size { width, height } = window.draw_size();
-    resize(width, height);
-
-    let mut events = Events::new(EventSettings::new().swap_buffers(true));
-
-    let start_time = Instant::now();
-    let mut prev_millis = 0;
-
-    while let Some(event) = events.next(&mut window) {
-        let now_millis = {
-            let duration = Instant::now().duration_since(start_time);
-            duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
-        };
-        let adv_millis = now_millis - prev_millis;
-        prev_millis = now_millis;
-
-        if adv_millis > 0 {
-            app.advance(adv_millis);
-        }
-
-        if let Some(_args) = event.render_args() {
-            unsafe {
-                gl::Clear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
-                gl::LoadIdentity();
-            }
-            glu::look_at(-20.0, -30.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-            app.draw();
-        }
-
-        if let Some(args) = event.resize_args() {
-            let width = args.draw_size[0] as f64;
-            let height = args.draw_size[1] as f64;
-            resize(width, height);
-        }
-
-        if let Some(args) = event.button_args() {
-            app.handle_button_args(&args);
-        }
-    }
+    Ok(())
 }

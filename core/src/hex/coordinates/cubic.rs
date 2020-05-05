@@ -1,5 +1,4 @@
-use crate::hex::coordinates::axial::AxialVector;
-use crate::vector::Vector3ISize;
+use crate::{hex::coordinates::axial::AxialVector, vector::Vector3ISize};
 use derive_more::Add;
 use std::ops::{Mul, MulAssign};
 

@@ -1,5 +1,4 @@
-use crate::hex::coordinates::cubic::CubicVector;
-use crate::vector::Vector2ISize;
+use crate::{hex::coordinates::cubic::CubicVector, vector::Vector2ISize};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct AxialVector(Vector2ISize);

@@ -1,27 +1,49 @@
-use crate::color::COLORS;
-use crate::demo::{Demo, DemoGraphics, Snake};
+use crate::{
+    demo::{Color, RhombusViewerAssets, Snake},
+    system::quadric::QuadricPositionSystem,
+};
+use amethyst::{
+    core::{math::Vector3, timing::Time, transform::Transform},
+    ecs::prelude::*,
+    input::is_key_down,
+    prelude::*,
+    winit::VirtualKeyCode,
+};
 use rhombus_core::dodec::coordinates::quadric::{QuadricVector, SphereIter};
+use std::{collections::VecDeque, ops::Deref, sync::Arc};
 
 pub struct DodecSnakeDemo {
     position: QuadricVector,
-    snakes: Vec<Snake<QuadricVector, SphereIter>>,
-    last_millis: u64,
+    snakes: Vec<Snake<Entity, SphereIter>>,
+    remaining_millis: u64,
 }
 
 impl DodecSnakeDemo {
     pub fn new(position: QuadricVector) -> Self {
         Self {
             position,
-            snakes: vec![Self::new_snake(position, 2)],
-            last_millis: 0,
+            snakes: Vec::new(),
+            remaining_millis: 0,
         }
     }
 
-    fn new_snake(position: QuadricVector, radius: usize) -> Snake<QuadricVector, SphereIter> {
+    fn new_snake(
+        position: QuadricVector,
+        radius: usize,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        assets: &Arc<RhombusViewerAssets>,
+    ) -> Snake<Entity, SphereIter> {
+        let mut state = VecDeque::new();
         let mut iter = Self::snake_center(position).sphere_iter(radius);
+        state.push_back(Self::push_dodec(
+            iter.next().expect("first"),
+            data,
+            assets,
+            Color::Red,
+        ));
         Snake {
             radius,
-            state: vec![iter.next().expect("first")],
+            state,
             iter,
         }
     }
@@ -33,39 +55,101 @@ impl DodecSnakeDemo {
     fn snake_tail_size(radius: usize) -> usize {
         12 * radius
     }
+
+    fn push_dodec(
+        dodec: QuadricVector,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        assets: &Arc<RhombusViewerAssets>,
+        color: Color,
+    ) -> Entity {
+        let pos = dodec.into();
+        let mut transform = Transform::default();
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
+        QuadricPositionSystem::transform(pos, &mut transform);
+        let color_data = assets.color_data[&color].clone();
+        data.world
+            .create_entity()
+            .with(assets.hex_handle.clone())
+            .with(color_data.texture)
+            .with(color_data.material)
+            .with(transform)
+            .with(pos)
+            .build()
+    }
 }
 
-impl Demo for DodecSnakeDemo {
-    fn advance(&mut self, millis: u64) {
-        let num = (millis + self.last_millis % 100) / 100;
-        self.last_millis += millis;
+impl SimpleState for DodecSnakeDemo {
+    fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
+        let assets = data
+            .world
+            .read_resource::<Arc<RhombusViewerAssets>>()
+            .deref()
+            .clone();
+
+        self.snakes = vec![Self::new_snake(self.position, 2, &mut data, &assets)];
+        self.remaining_millis = 0;
+    }
+
+    fn on_stop(&mut self, data: StateData<'_, GameData<'_, '_>>) {
         for snake in &mut self.snakes {
-            for _ in 0..num {
-                if let Some(dodec) = snake.iter.next() {
-                    snake.state.push(dodec);
-                } else {
-                    snake.iter = Self::snake_center(self.position).sphere_iter(snake.radius);
-                    let slice = snake.state.as_mut_slice();
-                    let len = slice.len().min(Self::snake_tail_size(snake.radius));
-                    slice.copy_within(slice.len() - len..slice.len(), 0);
-                    snake.state.truncate(len);
-                    snake.state.push(snake.iter.next().expect("first"));
-                }
+            while let Some(entity) = snake.state.pop_front() {
+                data.world.delete_entity(entity).expect("delete entity");
             }
+        }
+        self.snakes.clear();
+    }
+
+    fn handle_event(
+        &mut self,
+        _: StateData<'_, GameData<'_, '_>>,
+        event: StateEvent,
+    ) -> SimpleTrans {
+        if let StateEvent::Window(event) = event {
+            if is_key_down(&event, VirtualKeyCode::Escape) {
+                Trans::Pop
+            } else {
+                Trans::None
+            }
+        } else {
+            Trans::None
         }
     }
 
-    fn draw(&self, graphics: &dyn DemoGraphics) {
-        for snake in &self.snakes {
-            for (i, dodec) in snake
-                .state
-                .iter()
-                .rev()
-                .take(Self::snake_tail_size(snake.radius))
-                .enumerate()
-            {
-                graphics.draw_dodec(*dodec, 0.8, COLORS[i % 6]);
+    fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
+        let assets = data
+            .world
+            .read_resource::<Arc<RhombusViewerAssets>>()
+            .deref()
+            .clone();
+
+        let delta_millis = {
+            let duration = data.world.read_resource::<Time>().delta_time();
+            duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
+        } + self.remaining_millis;
+        let num = delta_millis / 100;
+        self.remaining_millis = delta_millis % 100;
+        for snake in &mut self.snakes {
+            for _ in 0..num {
+                if let Some(dodec) = snake.iter.next() {
+                    snake
+                        .state
+                        .push_back(Self::push_dodec(dodec, data, &assets, Color::Red));
+                } else {
+                    snake.iter = Self::snake_center(self.position).sphere_iter(snake.radius);
+                    snake.state.push_back(Self::push_dodec(
+                        snake.iter.next().expect("first"),
+                        data,
+                        &assets,
+                        Color::Red,
+                    ));
+                }
+                while snake.state.len() > Self::snake_tail_size(snake.radius) {
+                    if let Some(entity) = snake.state.pop_front() {
+                        data.world.delete_entity(entity).expect("delete entity");
+                    }
+                }
             }
         }
+        Trans::None
     }
 }
