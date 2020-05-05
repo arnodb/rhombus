@@ -13,6 +13,7 @@ pub mod hex;
 #[derive(Debug)]
 pub struct RhombusViewerAssets {
     pub hex_handle: Handle<Mesh>,
+    pub dodec_handle: Handle<Mesh>,
     pub color_data: HashMap<Color, ColorData>,
 }
 

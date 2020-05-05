@@ -44,7 +44,7 @@ impl DodecDirectionsDemo {
             self.entities.push(
                 data.world
                     .create_entity()
-                    .with(assets.hex_handle.clone())
+                    .with(assets.dodec_handle.clone())
                     .with(color_data.texture)
                     .with(color_data.material)
                     .with(transform)

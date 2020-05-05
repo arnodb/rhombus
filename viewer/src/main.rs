@@ -162,6 +162,9 @@ impl SimpleState for RhombusViewer {
             let hex_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
                 loader.load("mesh/hex.obj", ObjFormat, &mut self.progress_counter)
             });
+            let dodec_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
+                loader.load("mesh/dodec.obj", ObjFormat, &mut self.progress_counter)
+            });
             let mat_defaults = data.world.read_resource::<MaterialDefaults>().0.clone();
             let color_data = [
                 (Color::Black, (0.0, 0.0, 0.0, 1.0)),
@@ -199,6 +202,7 @@ impl SimpleState for RhombusViewer {
             .collect::<HashMap<_, _>>();
             data.world.insert(Arc::new(RhombusViewerAssets {
                 hex_handle,
+                dodec_handle,
                 color_data,
             }));
         }
