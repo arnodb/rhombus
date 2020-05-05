@@ -1,29 +1,39 @@
-use crate::color::{DARK_RED, GREEN, GREY, RED, WHITE};
-use crate::demo::{Demo, DemoGraphics};
-use piston_window::{Button, ButtonArgs, ButtonState, Key};
-use rhombus_core::hex::coordinates::axial::AxialVector;
-use rhombus_core::hex::coordinates::cubic::CubicVector;
-use std::collections::BTreeMap;
+use crate::{
+    demo::{Color, RhombusViewerAssets},
+    system::cubic::CubicPositionSystem,
+};
+use amethyst::{
+    core::{math::Vector3, transform::Transform},
+    ecs::prelude::*,
+    input::{get_key, ElementState},
+    prelude::*,
+    winit::VirtualKeyCode,
+};
+use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum HexState {
     Open,
     Wall,
 }
 
+struct HexData {
+    state: HexState,
+    entity: Entity,
+}
+
 pub struct HexFlatBuilderDemo {
     position: CubicVector,
-    world: BTreeMap<(isize, isize), HexState>,
+    world: BTreeMap<(isize, isize), HexData>,
     direction: usize,
 }
 
 impl HexFlatBuilderDemo {
     pub fn new(position: CubicVector) -> Self {
-        let mut world = BTreeMap::new();
-        world.insert(Self::to_world_key(position), HexState::Open);
         Self {
             position,
-            world,
+            world: BTreeMap::new(),
             direction: 0,
         }
     }
@@ -33,94 +43,167 @@ impl HexFlatBuilderDemo {
         (axial.q(), axial.r())
     }
 
-    fn wallize(&mut self, pos: CubicVector) {
+    fn create_ground(
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        assets: &Arc<RhombusViewerAssets>,
+        position: CubicVector,
+    ) -> Entity {
+        let pos = position.into();
+        let mut transform = Transform::default();
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
+        CubicPositionSystem::transform(pos, &mut transform);
+        let color_data = assets.color_data[&Color::White].clone();
+        data.world
+            .create_entity()
+            .with(assets.hex_handle.clone())
+            .with(color_data.texture)
+            .with(color_data.material)
+            .with(transform)
+            .with(pos)
+            .build()
+    }
+
+    fn create_wall(
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        assets: &Arc<RhombusViewerAssets>,
+        position: CubicVector,
+    ) -> Entity {
+        let pos = position.into();
+        let mut transform = Transform::default();
+        transform.set_scale(Vector3::new(0.8, 0.8, 3.0));
+        CubicPositionSystem::transform(pos, &mut transform);
+        let color_data = assets.color_data[&Color::Red].clone();
+        data.world
+            .create_entity()
+            .with(assets.hex_handle.clone())
+            .with(color_data.texture)
+            .with(color_data.material)
+            .with(transform)
+            .with(pos)
+            .build()
+    }
+
+    fn wallize(
+        &mut self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        assets: &Arc<RhombusViewerAssets>,
+        position: CubicVector,
+    ) {
         self.world
-            .entry(Self::to_world_key(pos))
-            .or_insert_with(|| HexState::Wall);
+            .entry(Self::to_world_key(position))
+            .or_insert_with(|| HexData {
+                state: HexState::Wall,
+                entity: Self::create_wall(data, assets, position),
+            });
     }
 }
 
-impl Demo for HexFlatBuilderDemo {
-    fn draw(&self, graphics: &dyn DemoGraphics) {
-        for (pos, state) in &self.world {
-            match state {
-                HexState::Open => {
-                    graphics.draw_hex(AxialVector::new(pos.0, pos.1).into(), 1.0, GREY);
-                }
-                HexState::Wall => {
-                    graphics.draw_hex(AxialVector::new(pos.0, pos.1).into(), 1.0, DARK_RED);
-                }
-            }
-        }
-        let ahead = self
+impl SimpleState for HexFlatBuilderDemo {
+    fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
+        let assets = data
             .world
-            .get(&Self::to_world_key(self.position.neighbor(self.direction)));
-        let color = match ahead {
-            Some(HexState::Wall) => RED,
-            Some(HexState::Open) => WHITE,
-            None => GREEN,
-        };
-        graphics.draw_hex_arrow(
-            self.position,
-            60.0 * self.direction as f32,
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, 0.0, 0.0),
-            color,
+            .read_resource::<Arc<RhombusViewerAssets>>()
+            .deref()
+            .clone();
+        self.world.insert(
+            Self::to_world_key(self.position),
+            HexData {
+                state: HexState::Open,
+                entity: Self::create_ground(&mut data, &assets, self.position),
+            },
         );
     }
 
-    fn handle_button_args(&mut self, args: &ButtonArgs) {
-        if let Button::Keyboard(key) = args.button {
-            match args.state {
-                ButtonState::Press => match key {
-                    Key::Left => self.direction = (self.direction + 1) % 6,
-                    Key::Right => self.direction = (self.direction + 5) % 6,
-                    Key::Up => {
-                        let next = self.position.neighbor(self.direction);
-                        let mut new = false;
-                        let next_state =
-                            self.world
-                                .entry(Self::to_world_key(next))
-                                .or_insert_with(|| {
-                                    new = true;
-                                    HexState::Open
-                                });
-                        match next_state {
-                            HexState::Open => {
-                                if new {
-                                    // Left
-                                    self.wallize(self.position.neighbor((self.direction + 1) % 6));
-                                    // Right
-                                    self.wallize(self.position.neighbor((self.direction + 5) % 6));
-                                    // Ahead
-                                    let ahead_left = next.neighbor((self.direction + 1) % 6);
-                                    let ahead = next.neighbor(self.direction);
-                                    let ahead_right = next.neighbor((self.direction + 5) % 6);
-                                    match (
-                                        self.world.get(&Self::to_world_key(ahead_left)),
-                                        self.world.get(&Self::to_world_key(ahead)),
-                                        self.world.get(&Self::to_world_key(ahead_right)),
-                                    ) {
-                                        (Some(HexState::Open), _, _)
-                                        | (_, _, Some(HexState::Open)) => {
-                                            self.wallize(ahead);
-                                        }
-                                        (_, Some(HexState::Open), _) => {
-                                            self.wallize(ahead_left);
-                                            self.wallize(ahead_right);
-                                        }
-                                        _ => {}
-                                    }
+    fn on_stop(&mut self, data: StateData<'_, GameData<'_, '_>>) {
+        for (_, hex) in self.world.iter() {
+            data.world.delete_entity(hex.entity).expect("delete entity");
+        }
+        self.world.clear();
+    }
+
+    fn handle_event(
+        &mut self,
+        mut data: StateData<'_, GameData<'_, '_>>,
+        event: StateEvent,
+    ) -> SimpleTrans {
+        if let StateEvent::Window(event) = event {
+            let mut trans = Trans::None;
+            let assets = data
+                .world
+                .read_resource::<Arc<RhombusViewerAssets>>()
+                .deref()
+                .clone();
+            match get_key(&event) {
+                Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
+                    trans = Trans::Pop;
+                }
+                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                    self.direction = (self.direction + 1) % 6;
+                }
+                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                    self.direction = (self.direction + 5) % 6;
+                }
+                Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
+                    let next = self.position.neighbor(self.direction);
+                    let mut new = false;
+                    let next_state =
+                        self.world
+                            .entry(Self::to_world_key(next))
+                            .or_insert_with(|| {
+                                new = true;
+                                HexData {
+                                    state: HexState::Open,
+                                    entity: Self::create_ground(&mut data, &assets, next),
                                 }
-                                self.position = next;
+                            });
+                    match next_state.state {
+                        HexState::Open => {
+                            if new {
+                                // Left
+                                self.wallize(
+                                    &mut data,
+                                    &assets,
+                                    self.position.neighbor((self.direction + 1) % 6),
+                                );
+                                // Right
+                                self.wallize(
+                                    &mut data,
+                                    &assets,
+                                    self.position.neighbor((self.direction + 5) % 6),
+                                );
+                                // Ahead
+                                let ahead_left = next.neighbor((self.direction + 1) % 6);
+                                let ahead = next.neighbor(self.direction);
+                                let ahead_right = next.neighbor((self.direction + 5) % 6);
+                                match (
+                                    self.world
+                                        .get(&Self::to_world_key(ahead_left))
+                                        .map(|h| h.state),
+                                    self.world.get(&Self::to_world_key(ahead)).map(|h| h.state),
+                                    self.world
+                                        .get(&Self::to_world_key(ahead_right))
+                                        .map(|h| h.state),
+                                ) {
+                                    (Some(HexState::Open), _, _) | (_, _, Some(HexState::Open)) => {
+                                        self.wallize(&mut data, &assets, ahead);
+                                    }
+                                    (_, Some(HexState::Open), _) => {
+                                        self.wallize(&mut data, &assets, ahead_left);
+                                        self.wallize(&mut data, &assets, ahead_right);
+                                    }
+                                    _ => {}
+                                }
                             }
-                            HexState::Wall => {}
+                            self.position = next;
                         }
+                        HexState::Wall => {}
                     }
-                    _ => {}
-                },
+                }
                 _ => {}
             }
+            trans
+        } else {
+            Trans::None
         }
     }
 }

@@ -1,15 +1,13 @@
 #[macro_use]
 extern crate derive_more;
 
-use crate::demo::dodec::{
-    directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo,
-};
-//use crate::demo::hex::bumpy_builder::HexBumpyBuilderDemo;
-use crate::demo::hex::directions::HexDirectionsDemo;
-//use crate::demo::hex::flat_builder::HexFlatBuilderDemo;
 use crate::{
     demo::{
-        hex::{ring::HexRingDemo, snake::HexSnakeDemo},
+        dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
+        hex::{
+            bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
+            flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
+        },
         Color, ColorData, RhombusViewerAssets,
     },
     system::{cubic::CubicPositionSystem, quadric::QuadricPositionSystem},
@@ -114,7 +112,6 @@ impl RhombusViewer {
             DEMO_DODEC_DIRECTIONS => Box::new(DodecDirectionsDemo::new(position)),
             DEMO_DODEC_SPHERE => Box::new(DodecSphereDemo::new(position)),
             DEMO_DODEC_SNAKE => Box::new(DodecSnakeDemo::new(position)),
-            /*
             // Flat hex builders
             HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new(CubicVector::new(
                 position.x(),
@@ -127,7 +124,6 @@ impl RhombusViewer {
                 position.y(),
                 position.z(),
             ))),
-            */
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
