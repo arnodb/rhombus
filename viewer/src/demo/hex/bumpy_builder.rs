@@ -108,7 +108,7 @@ impl SimpleState for HexBumpyBuilderDemo {
         let vblock = self
             .world
             .entry(Self::to_world_key(self.position))
-            .or_insert_with(|| BTreeSet::new());
+            .or_insert_with(BTreeSet::new);
         vblock.insert(VerticalBlock {
             floor: 0,
             ceiling: BLOCK_HEIGHT,
@@ -178,16 +178,15 @@ impl SimpleState for HexBumpyBuilderDemo {
                     let vblock = self
                         .world
                         .entry(Self::to_world_key(next_pos))
-                        .or_insert_with(|| BTreeSet::new());
+                        .or_insert_with(BTreeSet::new);
                     // Really need an interval tree for that
-                    let mut iter = vblock.iter();
                     enum Movement {
                         Void,
                         Go { height: isize },
                         Blocked,
                     }
                     let mut movement = Movement::Void;
-                    while let Some(block) = iter.next() {
+                    for block in vblock.iter() {
                         if (block.floor - self.height).abs() <= 1 {
                             // Just go regardless of the vertical direction
                             movement = Movement::Go {
