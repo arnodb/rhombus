@@ -21,7 +21,9 @@ use std::{
     sync::Arc,
 };
 
-const BLOCK_HEIGHT: isize = 2;
+const LEVEL_HEIGHT: f32 = 0.5;
+// So that turning direction at each step leads to a nice stairway
+const BLOCK_HEIGHT: isize = 5;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct VerticalBlock {
@@ -69,7 +71,7 @@ impl HexBumpyBuilderDemo {
         direction: (usize, VerticalDirection),
         world: &Arc<RhombusViewerWorld>,
     ) {
-        let pos = (position, 1.0 + height as f32).into();
+        let pos = (position, 0.7 + height as f32 * LEVEL_HEIGHT).into();
         world.transform_cubic(pos, transform);
         transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
         match direction.1 {
@@ -135,7 +137,7 @@ impl HexBumpyBuilderDemo {
         // Height = 0.4
         transform.set_scale(Vector3::new(0.8, 0.8, 0.2));
         // Floor is solid from 0.0 to height.
-        let pos = (position, floor as f32 + 0.2).into();
+        let pos = (position, floor as f32 * LEVEL_HEIGHT + 0.2).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].clone();
         data.world
@@ -154,10 +156,9 @@ impl HexBumpyBuilderDemo {
         ceiling: isize,
     ) -> Entity {
         let mut transform = Transform::default();
-        // Height = 0.2
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.1));
-        // Leave a 0.1 space between the ceiling and the floor above it.
-        let pos = (position, ceiling as f32 + 0.8).into();
+        // Height = 0.1
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.05));
+        let pos = (position, (ceiling as f32 + 0.7) * LEVEL_HEIGHT).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
         data.world
