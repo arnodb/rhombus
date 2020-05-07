@@ -38,13 +38,15 @@ use amethyst::{
     },
     utils::application_root_dir,
     winit::VirtualKeyCode,
-    Application, GameDataBuilder, SimpleState, StateEvent,
+    Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
 use rhombus_core::{
     dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 use structopt::StructOpt;
+
+const LOGGER_CONFIG: &str = "config/logger.yaml";
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
@@ -299,6 +301,42 @@ impl SimpleState for RhombusViewer {
     }
 }
 
+fn logger_setup(logger_config_path: Option<PathBuf>) -> Result<(), Error> {
+    let is_user_specified = logger_config_path.is_some();
+
+    // If the user specified a logger configuration path, use that.
+    // Otherwise fallback to a default.
+    let logger_config_path = logger_config_path.unwrap_or_else(|| PathBuf::from(LOGGER_CONFIG));
+    let logger_config_path = if logger_config_path.is_relative() {
+        let app_dir = application_root_dir()?;
+        app_dir.join(logger_config_path)
+    } else {
+        logger_config_path
+    };
+
+    let logger_config: LoggerConfig = if logger_config_path.exists() {
+        let logger_file = File::open(&logger_config_path)?;
+        let mut logger_file_reader = BufReader::new(logger_file);
+        let logger_config = serde_yaml::from_reader(&mut logger_file_reader)?;
+
+        Ok(logger_config)
+    } else if is_user_specified {
+        let message = format!(
+            "Failed to read logger configuration file: `{}`.",
+            logger_config_path.display()
+        );
+        eprintln!("{}", message);
+
+        Err(Error::from_string(message))
+    } else {
+        Ok(LoggerConfig::default())
+    }?;
+
+    amethyst::Logger::from_config(logger_config).start();
+
+    Ok(())
+}
+
 #[derive(StructOpt, Debug)]
 enum DemoOption {
     #[structopt(name = "hex-directions")]
@@ -329,15 +367,16 @@ struct Options {
 fn main() -> amethyst::Result<()> {
     let options = Options::from_args();
 
-    amethyst::start_logger(Default::default());
-
     let app_root = application_root_dir()?;
     let display_config_path = app_root.join("config/display.ron");
     let assets_dir = app_root.join("assets/");
 
+    logger_setup(None)?;
+
     use amethyst::renderer::plugins::RenderDebugLines;
     let game_data = GameDataBuilder::default()
         .with_bundle(TransformBundle::new())?
+        //.with_bundle(amethyst::utils::fps_counter::FpsCounterBundle)?
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(

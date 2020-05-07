@@ -1,0 +1,13 @@
+stdout: "Colored" # "Off", "Plain", "Colored"
+level_filter: "debug"
+log_gfx_backend_level: "warn"
+log_gfx_rendy_level: "warn"
+module_levels:
+    - ["amethyst", "warn"]
+    - ["amethyst_assets", "info"]
+    - ["amethyst_rendy", "info"]
+    - ["rendy_chain", "info"]
+    - ["rendy_factory", "info"]
+    - ["rendy_graph", "info"]
+    - ["rendy_memory", "info"]
+    - ["rendy_wsi", "info"]

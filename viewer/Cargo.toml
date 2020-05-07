@@ -9,3 +9,4 @@ derive_more = "0.99"
 amethyst = { version = "0.15", features = ["vulkan"] }
 rhombus_core = { path = "../core"}
 structopt = "0.3"
+serde_yaml = "0.8"
