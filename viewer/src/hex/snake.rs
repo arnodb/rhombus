@@ -59,9 +59,9 @@ impl HexSnakeDemo {
         world: &Arc<RhombusViewerWorld>,
         color: Color,
     ) -> Entity {
-        let pos = (hex, 0.0).into();
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.08));
+        let pos = (hex, 0.0).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&color].clone();
         data.world

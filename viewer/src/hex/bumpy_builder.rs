@@ -69,7 +69,7 @@ impl HexBumpyBuilderDemo {
         direction: (usize, VerticalDirection),
         world: &Arc<RhombusViewerWorld>,
     ) {
-        let pos = (position, 0.5 + height as f32).into();
+        let pos = (position, 1.0 + height as f32).into();
         world.transform_cubic(pos, transform);
         transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
         match direction.1 {
@@ -107,7 +107,7 @@ impl HexBumpyBuilderDemo {
         let pointer_rot_trans = data.world.create_entity().with(transform).build();
 
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.3, 0.3, 0.3));
+        transform.set_scale(Vector3::new(0.3, 0.3, 0.1));
         transform.set_translation_x(0.7);
         let color_data = Self::get_pointer_texture_and_material(direction, &world.assets);
         let pointer = data
@@ -131,9 +131,11 @@ impl HexBumpyBuilderDemo {
         position: CubicVector,
         floor: isize,
     ) -> Entity {
-        let pos = (position, floor as f32).into();
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 2.0));
+        // Height = 0.4
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.2));
+        // Floor is solid from 0.0 to height.
+        let pos = (position, floor as f32 + 0.2).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].clone();
         data.world
@@ -151,9 +153,11 @@ impl HexBumpyBuilderDemo {
         position: CubicVector,
         ceiling: isize,
     ) -> Entity {
-        let pos = (position, ceiling as f32).into();
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.9, 0.9, 1.0));
+        // Height = 0.2
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.1));
+        // Leave a 0.1 space between the ceiling and the floor above it.
+        let pos = (position, ceiling as f32 + 0.8).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
         data.world

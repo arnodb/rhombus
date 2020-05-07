@@ -67,7 +67,7 @@ impl HexFlatBuilderDemo {
         let pointer_rot_trans = data.world.create_entity().with(transform).build();
 
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.3, 0.3, 0.3));
+        transform.set_scale(Vector3::new(0.3, 0.3, 0.1));
         transform.set_translation_x(0.7);
         let color_data = world.assets.color_data[&Color::Cyan].clone();
         let pointer = data
@@ -90,9 +90,9 @@ impl HexFlatBuilderDemo {
         world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
     ) -> Entity {
-        let pos = (position, 0.1).into();
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 1.0));
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.1));
+        let pos = (position, 0.1).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].clone();
         data.world
@@ -109,9 +109,9 @@ impl HexFlatBuilderDemo {
         world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
     ) -> Entity {
-        let pos = (position, 0.3).into();
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 3.0));
+        transform.set_scale(Vector3::new(0.8, 0.8, 0.3));
+        let pos = (position, 0.3).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
         data.world
