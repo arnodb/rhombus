@@ -1,7 +1,4 @@
-use crate::{
-    demo::{Color, RhombusViewerAssets},
-    system::cubic::CubicPositionSystem,
-};
+use crate::{assets::Color, world::RhombusViewerWorld};
 use amethyst::{
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
@@ -30,9 +27,9 @@ impl HexRingDemo {
 
 impl SimpleState for HexRingDemo {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
 
@@ -41,16 +38,15 @@ impl SimpleState for HexRingDemo {
                 let pos = (hex, 0.0).into();
                 let mut transform = Transform::default();
                 transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
-                CubicPositionSystem::transform(pos, &mut transform);
-                let color_data = assets.color_data[&Color::Red].clone();
+                world.transform_cubic(pos, &mut transform);
+                let color_data = world.assets.color_data[&Color::Red].clone();
                 self.entities.push(
                     data.world
                         .create_entity()
-                        .with(assets.hex_handle.clone())
+                        .with(world.assets.hex_handle.clone())
                         .with(color_data.texture)
                         .with(color_data.material)
                         .with(transform)
-                        .with(pos)
                         .build(),
                 );
             }

@@ -5,10 +5,7 @@ use amethyst::{
         Material,
     },
 };
-use std::collections::{HashMap, VecDeque};
-
-pub mod dodec;
-pub mod hex;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct RhombusViewerAssets {
@@ -34,10 +31,4 @@ pub enum Color {
 pub struct ColorData {
     pub texture: Handle<Texture>,
     pub material: Handle<Material>,
-}
-
-struct Snake<V, I> {
-    radius: usize,
-    state: VecDeque<V>,
-    iter: I,
 }

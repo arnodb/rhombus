@@ -1,7 +1,4 @@
-use crate::{
-    demo::{Color, RhombusViewerAssets, Snake},
-    system::quadric::QuadricPositionSystem,
-};
+use crate::{assets::Color, snake::Snake, world::RhombusViewerWorld};
 use amethyst::{
     core::{math::Vector3, timing::Time, transform::Transform},
     ecs::prelude::*,
@@ -9,17 +6,17 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::dodec::coordinates::quadric::{QuadricVector, SphereIter};
+use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
 use std::{collections::VecDeque, ops::Deref, sync::Arc};
 
-pub struct DodecSnakeDemo {
-    position: QuadricVector,
-    snakes: Vec<Snake<Entity, SphereIter>>,
+pub struct HexSnakeDemo {
+    position: CubicVector,
+    snakes: Vec<Snake<Entity, RingIter>>,
     remaining_millis: u64,
 }
 
-impl DodecSnakeDemo {
-    pub fn new(position: QuadricVector) -> Self {
+impl HexSnakeDemo {
+    pub fn new(position: CubicVector) -> Self {
         Self {
             position,
             snakes: Vec::new(),
@@ -28,17 +25,17 @@ impl DodecSnakeDemo {
     }
 
     fn new_snake(
-        position: QuadricVector,
+        position: CubicVector,
         radius: usize,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
-    ) -> Snake<Entity, SphereIter> {
+        world: &Arc<RhombusViewerWorld>,
+    ) -> Snake<Entity, RingIter> {
         let mut state = VecDeque::new();
-        let mut iter = Self::snake_center(position).sphere_iter(radius);
-        state.push_back(Self::push_dodec(
+        let mut iter = Self::snake_center(position).ring_iter(radius);
+        state.push_back(Self::push_hex(
             iter.next().expect("first"),
             data,
-            assets,
+            &world,
             Color::Red,
         ));
         Snake {
@@ -48,45 +45,47 @@ impl DodecSnakeDemo {
         }
     }
 
-    fn snake_center(position: QuadricVector) -> QuadricVector {
+    fn snake_center(position: CubicVector) -> CubicVector {
         position
     }
 
     fn snake_tail_size(radius: usize) -> usize {
-        12 * radius
+        3 * radius
     }
 
-    fn push_dodec(
-        dodec: QuadricVector,
+    fn push_hex(
+        hex: CubicVector,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
+        world: &Arc<RhombusViewerWorld>,
         color: Color,
     ) -> Entity {
-        let pos = dodec.into();
+        let pos = (hex, 0.0).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
-        QuadricPositionSystem::transform(pos, &mut transform);
-        let color_data = assets.color_data[&color].clone();
+        world.transform_cubic(pos, &mut transform);
+        let color_data = world.assets.color_data[&color].clone();
         data.world
             .create_entity()
-            .with(assets.dodec_handle.clone())
+            .with(world.assets.hex_handle.clone())
             .with(color_data.texture)
             .with(color_data.material)
             .with(transform)
-            .with(pos)
             .build()
     }
 }
 
-impl SimpleState for DodecSnakeDemo {
+impl SimpleState for HexSnakeDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
 
-        self.snakes = vec![Self::new_snake(self.position, 2, &mut data, &assets)];
+        self.snakes = vec![
+            Self::new_snake(self.position, 1, &mut data, &world),
+            Self::new_snake(self.position, 3, &mut data, &world),
+        ];
         self.remaining_millis = 0;
     }
 
@@ -116,9 +115,9 @@ impl SimpleState for DodecSnakeDemo {
     }
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
 
@@ -130,16 +129,16 @@ impl SimpleState for DodecSnakeDemo {
         self.remaining_millis = delta_millis % 100;
         for snake in &mut self.snakes {
             for _ in 0..num {
-                if let Some(dodec) = snake.iter.next() {
+                if let Some(hex) = snake.iter.next() {
                     snake
                         .state
-                        .push_back(Self::push_dodec(dodec, data, &assets, Color::Red));
+                        .push_back(Self::push_hex(hex, data, &world, Color::Red));
                 } else {
-                    snake.iter = Self::snake_center(self.position).sphere_iter(snake.radius);
-                    snake.state.push_back(Self::push_dodec(
+                    snake.iter = Self::snake_center(self.position).ring_iter(snake.radius);
+                    snake.state.push_back(Self::push_hex(
                         snake.iter.next().expect("first"),
                         data,
-                        &assets,
+                        &world,
                         Color::Red,
                     ));
                 }

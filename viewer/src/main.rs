@@ -1,16 +1,20 @@
 #[macro_use]
 extern crate derive_more;
 
+pub mod assets;
+pub mod dodec;
+pub mod hex;
+pub mod snake;
+pub mod world;
+
 use crate::{
-    demo::{
-        dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
-        hex::{
-            bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
-            flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
-        },
-        Color, ColorData, RhombusViewerAssets,
+    assets::{Color, ColorData, RhombusViewerAssets},
+    dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
+    hex::{
+        bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
+        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
     },
-    system::{cubic::CubicPositionSystem, quadric::QuadricPositionSystem},
+    world::RhombusViewerWorld,
 };
 use amethyst::{
     assets::{AssetLoaderSystemData, ProgressCounter},
@@ -41,9 +45,6 @@ use rhombus_core::{
 };
 use std::{collections::HashMap, sync::Arc};
 use structopt::StructOpt;
-
-mod demo;
-mod system;
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
@@ -203,11 +204,13 @@ impl SimpleState for RhombusViewer {
                 (*color, ColorData { texture, material })
             })
             .collect::<HashMap<_, _>>();
-            data.world.insert(Arc::new(RhombusViewerAssets {
-                hex_handle,
-                dodec_handle,
-                pointer_handle,
-                color_data,
+            data.world.insert(Arc::new(RhombusViewerWorld {
+                assets: RhombusViewerAssets {
+                    hex_handle,
+                    dodec_handle,
+                    pointer_handle,
+                    color_data,
+                },
             }));
         }
 
@@ -335,8 +338,6 @@ fn main() -> amethyst::Result<()> {
     use amethyst::renderer::plugins::RenderDebugLines;
     let game_data = GameDataBuilder::default()
         .with_bundle(TransformBundle::new())?
-        .with(CubicPositionSystem, "cubic_position_system", &[])
-        .with(QuadricPositionSystem, "quadric_position_system", &[])
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(

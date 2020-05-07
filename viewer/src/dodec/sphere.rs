@@ -1,7 +1,4 @@
-use crate::{
-    demo::{Color, RhombusViewerAssets},
-    system::quadric::QuadricPositionSystem,
-};
+use crate::{assets::Color, world::RhombusViewerWorld};
 use amethyst::{
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
@@ -30,9 +27,9 @@ impl DodecSphereDemo {
 
 impl SimpleState for DodecSphereDemo {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
 
@@ -41,16 +38,15 @@ impl SimpleState for DodecSphereDemo {
                 let pos = dodec.into();
                 let mut transform = Transform::default();
                 transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
-                QuadricPositionSystem::transform(pos, &mut transform);
-                let color_data = assets.color_data[&Color::Red].clone();
+                world.transform_quadric(pos, &mut transform);
+                let color_data = world.assets.color_data[&Color::Red].clone();
                 self.entities.push(
                     data.world
                         .create_entity()
-                        .with(assets.dodec_handle.clone())
+                        .with(world.assets.dodec_handle.clone())
                         .with(color_data.texture)
                         .with(color_data.material)
                         .with(transform)
-                        .with(pos)
                         .build(),
                 );
             }

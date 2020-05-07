@@ -1,7 +1,4 @@
-use crate::{
-    demo::{Color, RhombusViewerAssets},
-    system::cubic::CubicPositionSystem,
-};
+use crate::{assets::Color, world::RhombusViewerWorld};
 use amethyst::{
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
@@ -9,16 +6,16 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::cubic::CubicVector;
+use rhombus_core::dodec::coordinates::quadric::QuadricVector;
 use std::{ops::Deref, sync::Arc};
 
-pub struct HexDirectionsDemo {
-    position: CubicVector,
+pub struct DodecDirectionsDemo {
+    position: QuadricVector,
     entities: Vec<Entity>,
 }
 
-impl HexDirectionsDemo {
-    pub fn new(position: CubicVector) -> Self {
+impl DodecDirectionsDemo {
+    pub fn new(position: QuadricVector) -> Self {
         Self {
             position,
             entities: Vec::new(),
@@ -28,49 +25,57 @@ impl HexDirectionsDemo {
     fn create_direction(
         &mut self,
         data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &Arc<RhombusViewerWorld>,
         direction: usize,
         length: usize,
-        assets: &Arc<RhombusViewerAssets>,
         color: Color,
     ) {
         let mut origin = self.position;
         for _ in 0..length {
             origin = origin.neighbor(direction);
-            let pos = (origin, 0.0).into();
+            let pos = origin.into();
             let mut transform = Transform::default();
-            transform.set_scale(Vector3::new(0.3, 0.3, 1.0));
-            CubicPositionSystem::transform(pos, &mut transform);
-            let color_data = assets.color_data[&color].clone();
+            transform.set_scale(Vector3::new(0.3, 0.3, 0.3));
+            world.transform_quadric(pos, &mut transform);
+            let color_data = world.assets.color_data[&color].clone();
             self.entities.push(
                 data.world
                     .create_entity()
-                    .with(assets.hex_handle.clone())
+                    .with(world.assets.dodec_handle.clone())
                     .with(color_data.texture)
                     .with(color_data.material)
                     .with(transform)
-                    .with(pos)
                     .build(),
             );
         }
     }
 }
 
-impl SimpleState for HexDirectionsDemo {
+impl SimpleState for DodecDirectionsDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
 
-        self.create_direction(&mut data, 0, 3, &assets, Color::Red);
-        self.create_direction(&mut data, 3, 2, &assets, Color::Red);
+        self.create_direction(&mut data, &world, 0, 3, Color::Red);
+        self.create_direction(&mut data, &world, 6, 2, Color::Red);
 
-        self.create_direction(&mut data, 1, 3, &assets, Color::Green);
-        self.create_direction(&mut data, 4, 2, &assets, Color::Green);
+        self.create_direction(&mut data, &world, 1, 3, Color::Green);
+        self.create_direction(&mut data, &world, 7, 2, Color::Green);
 
-        self.create_direction(&mut data, 2, 3, &assets, Color::Blue);
-        self.create_direction(&mut data, 5, 2, &assets, Color::Blue);
+        self.create_direction(&mut data, &world, 2, 3, Color::Blue);
+        self.create_direction(&mut data, &world, 8, 2, Color::Blue);
+
+        self.create_direction(&mut data, &world, 3, 3, Color::Yellow);
+        self.create_direction(&mut data, &world, 9, 2, Color::Yellow);
+
+        self.create_direction(&mut data, &world, 4, 3, Color::Magenta);
+        self.create_direction(&mut data, &world, 10, 2, Color::Magenta);
+
+        self.create_direction(&mut data, &world, 5, 3, Color::Cyan);
+        self.create_direction(&mut data, &world, 11, 2, Color::Cyan);
     }
 
     fn on_stop(&mut self, data: StateData<'_, GameData<'_, '_>>) {

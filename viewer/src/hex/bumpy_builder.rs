@@ -1,6 +1,6 @@
 use crate::{
-    demo::{Color, RhombusViewerAssets},
-    system::cubic::{CubicPosition, CubicPositionSystem},
+    assets::{Color, ColorData, RhombusViewerAssets},
+    world::RhombusViewerWorld,
 };
 use amethyst::{
     assets::Handle,
@@ -62,41 +62,61 @@ impl HexBumpyBuilderDemo {
         (axial.q(), axial.r())
     }
 
+    fn set_pointer_rot_trans_transform(
+        transform: &mut Transform,
+        position: CubicVector,
+        height: isize,
+        direction: (usize, VerticalDirection),
+        world: &Arc<RhombusViewerWorld>,
+    ) {
+        let pos = (position, 0.5 + height as f32).into();
+        world.transform_cubic(pos, transform);
+        transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
+        match direction.1 {
+            VerticalDirection::Horizontal => {}
+            VerticalDirection::Up => {
+                transform.append_rotation_y_axis(-std::f32::consts::PI / 10.0);
+            }
+            VerticalDirection::Down => {
+                transform.append_rotation_y_axis(std::f32::consts::PI / 10.0);
+            }
+        }
+    }
+
+    fn get_pointer_texture_and_material(
+        direction: (usize, VerticalDirection),
+        assets: &RhombusViewerAssets,
+    ) -> ColorData {
+        let color = match direction.1 {
+            VerticalDirection::Horizontal => Color::Cyan,
+            VerticalDirection::Up => Color::Green,
+            VerticalDirection::Down => Color::Red,
+        };
+        assets.color_data[&color].clone()
+    }
+
     fn create_pointer(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
+        world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
         height: isize,
         direction: (usize, VerticalDirection),
     ) -> [Entity; 2] {
         let mut transform = Transform::default();
-        let pos = (position, 0.5 + height as f32).into();
-        CubicPositionSystem::transform(pos, &mut transform);
-        transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
-        let color = match direction.1 {
-            VerticalDirection::Horizontal => Color::Cyan,
-            VerticalDirection::Up => {
-                transform.append_rotation_y_axis(-std::f32::consts::PI / 10.0);
-                Color::Green
-            }
-            VerticalDirection::Down => {
-                transform.append_rotation_y_axis(std::f32::consts::PI / 10.0);
-                Color::Red
-            }
-        };
-        let pointer_rot_trans = data.world.create_entity().with(transform).with(pos).build();
+        Self::set_pointer_rot_trans_transform(&mut transform, position, height, direction, world);
+        let pointer_rot_trans = data.world.create_entity().with(transform).build();
 
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.3, 0.3, 0.3));
         transform.set_translation_x(0.7);
-        let color_data = assets.color_data[&color].clone();
+        let color_data = Self::get_pointer_texture_and_material(direction, &world.assets);
         let pointer = data
             .world
             .create_entity()
             .with(Parent {
                 entity: pointer_rot_trans,
             })
-            .with(assets.pointer_handle.clone())
+            .with(world.assets.pointer_handle.clone())
             .with(color_data.texture)
             .with(color_data.material)
             .with(transform)
@@ -107,43 +127,41 @@ impl HexBumpyBuilderDemo {
 
     fn create_floor(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
+        world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
         floor: isize,
     ) -> Entity {
         let pos = (position, floor as f32).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.8, 2.0));
-        CubicPositionSystem::transform(pos, &mut transform);
-        let color_data = assets.color_data[&Color::White].clone();
+        world.transform_cubic(pos, &mut transform);
+        let color_data = world.assets.color_data[&Color::White].clone();
         data.world
             .create_entity()
-            .with(assets.hex_handle.clone())
+            .with(world.assets.hex_handle.clone())
             .with(color_data.texture)
             .with(color_data.material)
             .with(transform)
-            .with(pos)
             .build()
     }
 
     fn create_ceiling(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
+        world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
         ceiling: isize,
     ) -> Entity {
         let pos = (position, ceiling as f32).into();
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.9, 0.9, 1.0));
-        CubicPositionSystem::transform(pos, &mut transform);
-        let color_data = assets.color_data[&Color::Red].clone();
+        world.transform_cubic(pos, &mut transform);
+        let color_data = world.assets.color_data[&Color::Red].clone();
         data.world
             .create_entity()
-            .with(assets.hex_handle.clone())
+            .with(world.assets.hex_handle.clone())
             .with(color_data.texture)
             .with(color_data.material)
             .with(transform)
-            .with(pos)
             .build()
     }
 
@@ -151,23 +169,18 @@ impl HexBumpyBuilderDemo {
         &mut self,
         direction: (usize, VerticalDirection),
         data: &mut StateData<'_, GameData<'_, '_>>,
-        assets: &Arc<RhombusViewerAssets>,
+        world: &Arc<RhombusViewerWorld>,
     ) {
         if self.direction.0 != direction.0 || self.direction.1 != direction.1 {
             let mut transform_storage = data.world.write_storage::<Transform>();
             if let Some(transform) = transform_storage.get_mut(self.pointer_entities[1]) {
-                transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
-                match direction.1 {
-                    VerticalDirection::Horizontal => {
-                        transform.append_rotation_y_axis(0.0);
-                    }
-                    VerticalDirection::Up => {
-                        transform.append_rotation_y_axis(-std::f32::consts::PI / 10.0);
-                    }
-                    VerticalDirection::Down => {
-                        transform.append_rotation_y_axis(std::f32::consts::PI / 10.0);
-                    }
-                }
+                Self::set_pointer_rot_trans_transform(
+                    transform,
+                    self.position,
+                    self.height,
+                    direction,
+                    world,
+                );
             }
         }
 
@@ -178,12 +191,7 @@ impl HexBumpyBuilderDemo {
                 texture_storage.get_mut(self.pointer_entities[0]),
                 material_storage.get_mut(self.pointer_entities[0]),
             ) {
-                let color = match direction.1 {
-                    VerticalDirection::Horizontal => Color::Cyan,
-                    VerticalDirection::Up => Color::Green,
-                    VerticalDirection::Down => Color::Red,
-                };
-                let color_data = assets.color_data[&color].clone();
+                let color_data = Self::get_pointer_texture_and_material(direction, &world.assets);
                 *texture = color_data.texture;
                 *material = color_data.material;
             }
@@ -197,28 +205,35 @@ impl HexBumpyBuilderDemo {
         position: CubicVector,
         height: isize,
         data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &Arc<RhombusViewerWorld>,
     ) {
         if self.position != position || self.height != height {
+            let mut transform_storage = data.world.write_storage::<Transform>();
+            if let Some(transform) = transform_storage.get_mut(self.pointer_entities[1]) {
+                Self::set_pointer_rot_trans_transform(
+                    transform,
+                    position,
+                    height,
+                    self.direction,
+                    world,
+                );
+            }
             self.position = position;
             self.height = height;
-            let mut pos_storage = data.world.write_storage::<CubicPosition>();
-            if let Some(pos) = pos_storage.get_mut(self.pointer_entities[1]) {
-                *pos = (position, 0.5 + height as f32).into();
-            }
         }
     }
 }
 
 impl SimpleState for HexBumpyBuilderDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let assets = data
+        let world = data
             .world
-            .read_resource::<Arc<RhombusViewerAssets>>()
+            .read_resource::<Arc<RhombusViewerWorld>>()
             .deref()
             .clone();
         self.pointer_entities.extend(&Self::create_pointer(
             &mut data,
-            &assets,
+            &world,
             self.position,
             self.height,
             self.direction,
@@ -230,8 +245,8 @@ impl SimpleState for HexBumpyBuilderDemo {
         vblock.insert(VerticalBlock {
             floor: 0,
             ceiling: BLOCK_HEIGHT,
-            floor_entity: Self::create_floor(&mut data, &assets, self.position, 0),
-            ceiling_entity: Self::create_ceiling(&mut data, &assets, self.position, BLOCK_HEIGHT),
+            floor_entity: Self::create_floor(&mut data, &world, self.position, 0),
+            ceiling_entity: Self::create_ceiling(&mut data, &world, self.position, BLOCK_HEIGHT),
         });
     }
 
@@ -258,9 +273,9 @@ impl SimpleState for HexBumpyBuilderDemo {
     ) -> SimpleTrans {
         if let StateEvent::Window(event) = event {
             let mut trans = Trans::None;
-            let assets = data
+            let world = data
                 .world
-                .read_resource::<Arc<RhombusViewerAssets>>()
+                .read_resource::<Arc<RhombusViewerWorld>>()
                 .deref()
                 .clone();
             match get_key(&event) {
@@ -271,14 +286,14 @@ impl SimpleState for HexBumpyBuilderDemo {
                     self.set_direction(
                         ((self.direction.0 + 1) % 6, self.direction.1),
                         &mut data,
-                        &assets,
+                        &world,
                     );
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
                     self.set_direction(
                         ((self.direction.0 + 5) % 6, self.direction.1),
                         &mut data,
-                        &assets,
+                        &world,
                     );
                 }
                 Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
@@ -293,7 +308,7 @@ impl SimpleState for HexBumpyBuilderDemo {
                             },
                         ),
                         &mut data,
-                        &assets,
+                        &world,
                     );
                 }
                 Some((VirtualKeyCode::Down, ElementState::Pressed)) => {
@@ -308,7 +323,7 @@ impl SimpleState for HexBumpyBuilderDemo {
                             },
                         ),
                         &mut data,
-                        &assets,
+                        &world,
                     );
                 }
                 Some((VirtualKeyCode::Space, ElementState::Pressed)) => {
@@ -351,19 +366,19 @@ impl SimpleState for HexBumpyBuilderDemo {
                                 floor: next_floor,
                                 ceiling: next_ceiling,
                                 floor_entity: Self::create_floor(
-                                    &mut data, &assets, next_pos, next_floor,
+                                    &mut data, &world, next_pos, next_floor,
                                 ),
                                 ceiling_entity: Self::create_ceiling(
                                     &mut data,
-                                    &assets,
+                                    &world,
                                     next_pos,
                                     next_ceiling,
                                 ),
                             });
-                            self.set_position(next_pos, next_floor, &mut data);
+                            self.set_position(next_pos, next_floor, &mut data, &world);
                         }
                         Movement::Go { height } => {
-                            self.set_position(next_pos, height, &mut data);
+                            self.set_position(next_pos, height, &mut data, &world);
                         }
                         Movement::Blocked => {}
                     }
