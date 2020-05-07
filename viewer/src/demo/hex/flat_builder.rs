@@ -120,18 +120,22 @@ impl HexFlatBuilderDemo {
     }
 
     fn set_direction(&mut self, direction: usize, data: &mut StateData<'_, GameData<'_, '_>>) {
-        self.direction = direction;
-        let mut transform_storage = data.world.write_storage::<Transform>();
-        if let Some(transform) = transform_storage.get_mut(self.pointer_entities[1]) {
-            transform.set_rotation_z_axis(direction as f32 * std::f32::consts::PI / 3.0);
+        if self.direction != direction {
+            let mut transform_storage = data.world.write_storage::<Transform>();
+            if let Some(transform) = transform_storage.get_mut(self.pointer_entities[1]) {
+                transform.set_rotation_z_axis(direction as f32 * std::f32::consts::PI / 3.0);
+            }
+            self.direction = direction;
         }
     }
 
     fn set_position(&mut self, position: CubicVector, data: &mut StateData<'_, GameData<'_, '_>>) {
-        self.position = position;
-        let mut pos_storage = data.world.write_storage::<CubicPosition>();
-        if let Some(pos) = pos_storage.get_mut(self.pointer_entities[1]) {
-            *pos = (position, 0.5).into();
+        if self.position != position {
+            let mut pos_storage = data.world.write_storage::<CubicPosition>();
+            if let Some(pos) = pos_storage.get_mut(self.pointer_entities[1]) {
+                *pos = (position, 0.5).into();
+            }
+            self.position = position;
         }
     }
 
