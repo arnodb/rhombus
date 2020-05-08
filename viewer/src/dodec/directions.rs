@@ -15,9 +15,9 @@ pub struct DodecDirectionsDemo {
 }
 
 impl DodecDirectionsDemo {
-    pub fn new(position: QuadricVector) -> Self {
+    pub fn new() -> Self {
         Self {
-            position,
+            position: QuadricVector::new(0, 0, 0, 0),
             entities: Vec::new(),
         }
     }

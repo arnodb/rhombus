@@ -16,9 +16,9 @@ pub struct HexSnakeDemo {
 }
 
 impl HexSnakeDemo {
-    pub fn new(position: CubicVector) -> Self {
+    pub fn new() -> Self {
         Self {
-            position,
+            position: CubicVector::new(0, 0, 0),
             snakes: Vec::new(),
             remaining_millis: 0,
         }

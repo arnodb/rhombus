@@ -40,9 +40,6 @@ use amethyst::{
     winit::VirtualKeyCode,
     Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
-use rhombus_core::{
-    dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
-};
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 use structopt::StructOpt;
 
@@ -69,17 +66,15 @@ enum RhombusViewerAnimation {
 }
 
 struct RhombusViewer {
-    position: QuadricVector,
     animation: RhombusViewerAnimation,
     last_resume_time: f64,
     progress_counter: ProgressCounter,
 }
 
 impl RhombusViewer {
-    fn new(position: QuadricVector, demo_num: Option<usize>) -> Self {
+    fn new(demo_num: Option<usize>) -> Self {
         let first_demo_num = demo_num.unwrap_or(0);
         Self {
-            position,
             animation: if demo_num.is_some() {
                 RhombusViewerAnimation::Fixed {
                     demo_num: first_demo_num,
@@ -94,39 +89,19 @@ impl RhombusViewer {
         }
     }
 
-    fn transition(demo_num: usize, position: QuadricVector) -> SimpleTrans {
+    fn transition(demo_num: usize) -> SimpleTrans {
         let new_state: Box<dyn State<GameData<'static, 'static>, StateEvent>> = match demo_num {
             // Simple demos
-            DEMO_HEX_DIRECTIONS => Box::new(HexDirectionsDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
-            DEMO_HEX_RING => Box::new(HexRingDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
-            DEMO_HEX_SNAKE => Box::new(HexSnakeDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
-            DEMO_DODEC_DIRECTIONS => Box::new(DodecDirectionsDemo::new(position)),
-            DEMO_DODEC_SPHERE => Box::new(DodecSphereDemo::new(position)),
-            DEMO_DODEC_SNAKE => Box::new(DodecSnakeDemo::new(position)),
+            DEMO_HEX_DIRECTIONS => Box::new(HexDirectionsDemo::new()),
+            DEMO_HEX_RING => Box::new(HexRingDemo::new()),
+            DEMO_HEX_SNAKE => Box::new(HexSnakeDemo::new()),
+            DEMO_DODEC_DIRECTIONS => Box::new(DodecDirectionsDemo::new()),
+            DEMO_DODEC_SPHERE => Box::new(DodecSphereDemo::new()),
+            DEMO_DODEC_SNAKE => Box::new(DodecSnakeDemo::new()),
             // Flat hex builders
-            HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
+            HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new()),
             // Bumpy hex builders
-            HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new(CubicVector::new(
-                position.x(),
-                position.y(),
-                position.z(),
-            ))),
+            HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
@@ -285,11 +260,9 @@ impl SimpleState for RhombusViewer {
         }
         if time - self.last_resume_time > 1.0 {
             match &mut self.animation {
-                RhombusViewerAnimation::Fixed { demo_num } => {
-                    Self::transition(*demo_num, self.position)
-                }
+                RhombusViewerAnimation::Fixed { demo_num } => Self::transition(*demo_num),
                 RhombusViewerAnimation::Rotating { demo_num } => {
-                    let trans = Self::transition(*demo_num, self.position);
+                    let trans = Self::transition(*demo_num);
                     let next_demo_num = (*demo_num + 1) % MAX_ROTATED_DEMOS;
                     *demo_num = next_demo_num;
                     trans
@@ -387,10 +360,7 @@ fn main() -> amethyst::Result<()> {
                 .with_plugin(RenderDebugLines::default()),
         )?;
 
-    let app = RhombusViewer::new(
-        QuadricVector::new(0, 0, 0, 0),
-        options.demo.map(|demo| demo as usize),
-    );
+    let app = RhombusViewer::new(options.demo.map(|demo| demo as usize));
 
     let mut game = Application::new(assets_dir, app, game_data)?;
 
