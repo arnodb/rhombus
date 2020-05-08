@@ -53,7 +53,7 @@ impl HexFlatBuilderDemo {
     ) {
         let pos = (position, 0.5).into();
         world.transform_cubic(pos, transform);
-        transform.set_rotation_z_axis(direction as f32 * std::f32::consts::PI / 3.0);
+        transform.set_rotation_y_axis(-(direction as f32) * std::f32::consts::PI / 3.0);
     }
 
     fn create_pointer(
@@ -67,7 +67,7 @@ impl HexFlatBuilderDemo {
         let pointer_rot_trans = data.world.create_entity().with(transform).build();
 
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.3, 0.3, 0.1));
+        transform.set_scale(Vector3::new(0.3, 0.1, 0.3));
         transform.set_translation_x(0.7);
         let color_data = world.assets.color_data[&Color::Cyan].clone();
         let pointer = data
@@ -91,7 +91,7 @@ impl HexFlatBuilderDemo {
         position: CubicVector,
     ) -> Entity {
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.1));
+        transform.set_scale(Vector3::new(0.8, 0.1, 0.8));
         let pos = (position, 0.1).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].clone();
@@ -110,7 +110,7 @@ impl HexFlatBuilderDemo {
         position: CubicVector,
     ) -> Entity {
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.3));
+        transform.set_scale(Vector3::new(0.8, 0.3, 0.8));
         let pos = (position, 0.3).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
@@ -217,10 +217,10 @@ impl SimpleState for HexFlatBuilderDemo {
                 Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
                     trans = Trans::Pop;
                 }
-                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
                     self.set_direction((self.direction + 1) % 6, &mut data, &world);
                 }
-                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
                     self.set_direction((self.direction + 5) % 6, &mut data, &world);
                 }
                 Some((VirtualKeyCode::Up, ElementState::Pressed)) => {

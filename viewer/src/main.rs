@@ -18,12 +18,14 @@ use crate::{
 };
 use amethyst::{
     assets::{AssetLoaderSystemData, ProgressCounter},
+    controls::{ArcBallControlBundle, ArcBallControlTag, FlyControlTag},
     core::{
         math::Vector3,
         timing::Time,
         transform::{Transform, TransformBundle},
     },
-    input::is_key_down,
+    ecs::prelude::*,
+    input::{is_key_down, StringBindings},
     prelude::*,
     renderer::{
         camera::{Camera, Perspective, Projection},
@@ -69,6 +71,7 @@ struct RhombusViewer {
     animation: RhombusViewerAnimation,
     last_resume_time: f64,
     progress_counter: ProgressCounter,
+    origin: Option<Entity>,
 }
 
 impl RhombusViewer {
@@ -86,6 +89,7 @@ impl RhombusViewer {
             },
             last_resume_time: 0.0,
             progress_counter: ProgressCounter::default(),
+            origin: None,
         }
     }
 
@@ -200,7 +204,7 @@ impl SimpleState for RhombusViewer {
         .into();
 
         let mut light_transform = Transform::default();
-        light_transform.set_translation_xyz(0.0, 0.0, 10.0);
+        light_transform.set_translation_xyz(0.0, 10.0, 0.0);
 
         data.world
             .create_entity()
@@ -208,8 +212,15 @@ impl SimpleState for RhombusViewer {
             .with(light_transform)
             .build();
 
+        let origin = data
+            .world
+            .create_entity()
+            .with(Transform::default())
+            .build();
+        self.origin = Some(origin);
+
         let mut transform = Transform::default();
-        transform.append_translation_xyz(-6.0, -9.0, 15.0);
+        transform.append_translation_xyz(-6.0, 15.0, 9.0);
         transform.face_towards(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
 
         let mut camera = Camera::standard_3d(WIDTH as f32, HEIGHT as f32);
@@ -224,7 +235,18 @@ impl SimpleState for RhombusViewer {
             .create_entity()
             .with(camera)
             .with(transform)
+            .with(FlyControlTag)
+            .with(ArcBallControlTag {
+                target: origin,
+                distance: 15.0,
+            })
             .build();
+    }
+
+    fn on_stop(&mut self, data: StateData<'_, GameData<'_, '_>>) {
+        if let Some(origin) = self.origin.take() {
+            data.world.delete_entity(origin).expect("delete entity");
+        }
     }
 
     fn on_resume(&mut self, data: StateData<'_, GameData<'_, '_>>) {
@@ -350,6 +372,7 @@ fn main() -> amethyst::Result<()> {
     let game_data = GameDataBuilder::default()
         .with_bundle(TransformBundle::new())?
         //.with_bundle(amethyst::utils::fps_counter::FpsCounterBundle)?
+        .with_bundle(ArcBallControlBundle::<StringBindings>::new())?
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(

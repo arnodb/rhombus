@@ -73,14 +73,14 @@ impl HexBumpyBuilderDemo {
     ) {
         let pos = (position, 0.7 + height as f32 * LEVEL_HEIGHT).into();
         world.transform_cubic(pos, transform);
-        transform.set_rotation_z_axis(direction.0 as f32 * std::f32::consts::PI / 3.0);
+        transform.set_rotation_y_axis(-(direction.0 as f32) * std::f32::consts::PI / 3.0);
         match direction.1 {
             VerticalDirection::Horizontal => {}
             VerticalDirection::Up => {
-                transform.append_rotation_y_axis(-std::f32::consts::PI / 10.0);
+                transform.append_rotation_z_axis(-std::f32::consts::PI / 10.0);
             }
             VerticalDirection::Down => {
-                transform.append_rotation_y_axis(std::f32::consts::PI / 10.0);
+                transform.append_rotation_z_axis(std::f32::consts::PI / 10.0);
             }
         }
     }
@@ -109,7 +109,7 @@ impl HexBumpyBuilderDemo {
         let pointer_rot_trans = data.world.create_entity().with(transform).build();
 
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.3, 0.3, 0.1));
+        transform.set_scale(Vector3::new(0.3, 0.1, 0.3));
         transform.set_translation_x(0.7);
         let color_data = Self::get_pointer_texture_and_material(direction, &world.assets);
         let pointer = data
@@ -135,7 +135,7 @@ impl HexBumpyBuilderDemo {
     ) -> Entity {
         let mut transform = Transform::default();
         // Height = 0.4
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.2));
+        transform.set_scale(Vector3::new(0.8, 0.2, 0.8));
         // Floor is solid from 0.0 to height.
         let pos = (position, floor as f32 * LEVEL_HEIGHT + 0.2).into();
         world.transform_cubic(pos, &mut transform);
@@ -157,7 +157,7 @@ impl HexBumpyBuilderDemo {
     ) -> Entity {
         let mut transform = Transform::default();
         // Height = 0.1
-        transform.set_scale(Vector3::new(0.8, 0.8, 0.05));
+        transform.set_scale(Vector3::new(0.8, 0.05, 0.8));
         let pos = (position, (ceiling as f32 + 0.7) * LEVEL_HEIGHT).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
@@ -287,14 +287,14 @@ impl SimpleState for HexBumpyBuilderDemo {
                 Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
                     trans = Trans::Pop;
                 }
-                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
                     self.set_direction(
                         ((self.direction.0 + 1) % 6, self.direction.1),
                         &mut data,
                         &world,
                     );
                 }
-                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
                     self.set_direction(
                         ((self.direction.0 + 5) % 6, self.direction.1),
                         &mut data,

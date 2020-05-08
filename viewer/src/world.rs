@@ -16,8 +16,8 @@ impl RhombusViewerWorld {
         let altitude = position.alt();
         transform.set_translation_xyz(
             f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
-            -row as f32 * 1.5,
             altitude,
+            -row as f32 * 1.5,
         );
     }
 
@@ -28,8 +28,8 @@ impl RhombusViewerWorld {
         let small2 = 1.0 / (2.0 * f32::sqrt(2.0));
         transform.set_translation_xyz(
             f32::sqrt(3.0) * ((col as f32) + ((row & 1) as f32 + depth as f32) / 2.0),
-            -1.5 * row as f32 - depth as f32 / 2.0,
             -(1.0 + small2) * depth as f32,
+            -1.5 * row as f32 - depth as f32 / 2.0,
         );
     }
 }
