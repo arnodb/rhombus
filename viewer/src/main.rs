@@ -15,7 +15,9 @@ use crate::{
         bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
         flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
     },
-    systems::follow_me::{FollowMeSystem, FollowMeTag},
+    systems::follow_me::{
+        FollowMeSystem, FollowMeTag, FollowMyRotationSystem, FollowMyRotationTag,
+    },
     world::RhombusViewerWorld,
 };
 use amethyst::{
@@ -24,7 +26,7 @@ use amethyst::{
     core::{
         math::Vector3,
         timing::Time,
-        transform::{Transform, TransformBundle},
+        transform::{Parent, Transform, TransformBundle},
     },
     ecs::prelude::*,
     input::{is_key_down, StringBindings},
@@ -215,6 +217,7 @@ impl SimpleState for RhombusViewer {
             .with(light_transform)
             .build();
 
+        // Origin with default orientation
         let origin = data
             .world
             .create_entity()
@@ -222,24 +225,60 @@ impl SimpleState for RhombusViewer {
             .build();
         self.origin = Some(origin);
 
+        // Origin with camera orientation
+        let mut origin_camera_transform = Transform::default();
+        origin_camera_transform.append_rotation_y_axis(-std::f32::consts::PI / 2.0);
+        origin_camera_transform.append_rotation_x_axis(-std::f32::consts::PI / 10.0);
+        let origin_camera = data
+            .world
+            .create_entity()
+            .with(Parent { entity: origin })
+            .with(origin_camera_transform)
+            .build();
+
+        // Follower with default orientation
+        let mut follower_transform = Transform::default();
+        //follower_transform.set_scale(Vector3::new(0.2, 0.05, 0.2));
+        follower_transform.prepend_rotation_y_axis(std::f32::consts::PI / 2.0);
         let follower = data
             .world
             .create_entity()
-            .with(Transform::default())
-            .with(FollowMeTag { target: origin })
+            .with(follower_transform)
+            //.with(assets.pointer_handle.clone())
+            //.with(assets.color_data[&Color::Magenta].texture.clone())
+            //.with(assets.color_data[&Color::Magenta].material.clone())
+            .with(FollowMeTag {
+                target: Some((origin, 0.1)),
+                rotation_target: None,
+            })
             .build();
         self.follower = Some(follower);
+
+        // Follower with camera orientation
+        let mut follower_camera_transform = Transform::default();
+        follower_camera_transform.append_translation_xyz(-9.0, 15.0, -6.0);
+        follower_camera_transform
+            .face_towards(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+        let follower_camera = data
+            .world
+            .create_entity()
+            .with(Parent { entity: follower })
+            .with(follower_camera_transform)
+            .with(FlyControlTag)
+            .with(FollowMeTag {
+                target: None,
+                rotation_target: None,
+            })
+            .build();
 
         let world = Arc::new(RhombusViewerWorld {
             assets,
             origin,
+            origin_camera,
             follower,
+            follower_camera,
         });
         data.world.insert(world);
-
-        let mut transform = Transform::default();
-        transform.append_translation_xyz(-6.0, 15.0, 9.0);
-        transform.face_towards(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
 
         let mut camera = Camera::standard_3d(WIDTH as f32, HEIGHT as f32);
         camera.set_projection(Projection::Perspective(Perspective::new(
@@ -252,8 +291,11 @@ impl SimpleState for RhombusViewer {
         data.world
             .create_entity()
             .with(camera)
-            .with(transform)
-            .with(FlyControlTag)
+            .with(Transform::default())
+            .with(FollowMyRotationTag {
+                targets: [follower_camera, follower],
+                lerp_ratio: 1.0,
+            })
             .with(ArcBallControlTag {
                 target: follower,
                 distance: 15.0,
@@ -276,7 +318,7 @@ impl SimpleState for RhombusViewer {
             .read_resource::<Time>()
             .absolute_real_time_seconds();
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        world.follow(&data, world.origin);
+        world.follow(&data, world.origin, None);
     }
 
     fn handle_event(
@@ -397,6 +439,11 @@ fn main() -> amethyst::Result<()> {
         //.with_bundle(amethyst::utils::fps_counter::FpsCounterBundle)?
         .with_bundle(ArcBallControlBundle::<StringBindings>::new())?
         .with(FollowMeSystem, "follow_me_system", &["arc_ball_rotation"])
+        .with(
+            FollowMyRotationSystem,
+            "follow_my_rotation_system",
+            &["arc_ball_rotation"],
+        )
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(

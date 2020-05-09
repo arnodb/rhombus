@@ -8,7 +8,9 @@ use rhombus_core::{
 pub struct RhombusViewerWorld {
     pub assets: RhombusViewerAssets,
     pub origin: Entity,
+    pub origin_camera: Entity,
     pub follower: Entity,
+    pub follower_camera: Entity,
 }
 
 impl RhombusViewerWorld {
@@ -35,12 +37,39 @@ impl RhombusViewerWorld {
         );
     }
 
-    pub fn follow(&self, data: &StateData<'_, GameData<'_, '_>>, target: Entity) {
+    pub fn follow(
+        &self,
+        data: &StateData<'_, GameData<'_, '_>>,
+        target: Entity,
+        rotation_target: Option<Entity>,
+    ) {
         let mut follow_me_storage = data.world.write_storage::<FollowMeTag>();
         follow_me_storage.get_mut(self.follower).and_then(|tag| {
-            tag.target = target;
+            tag.target = Some((target, 0.1));
+            tag.rotation_target = rotation_target.map(|t| (t, 0.1));
             Some(())
         });
+        if rotation_target.is_some() {
+            let mut transform_storage = data.world.write_storage::<Transform>();
+            let rotation = transform_storage
+                .get(self.origin_camera)
+                .map(Transform::rotation)
+                .cloned();
+            if let Some(rotation) = rotation {
+                transform_storage
+                    .get_mut(self.follower_camera)
+                    .and_then(|transform| {
+                        *transform.rotation_mut() = rotation;
+                        Some(())
+                    });
+            }
+        }
+        follow_me_storage
+            .get_mut(self.follower_camera)
+            .and_then(|tag| {
+                tag.rotation_target = rotation_target.map(|_| (self.origin_camera, 0.01));
+                Some(())
+            });
     }
 }
 

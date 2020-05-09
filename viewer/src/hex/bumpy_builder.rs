@@ -123,7 +123,7 @@ impl HexBumpyBuilderDemo {
             .with(transform)
             .build();
 
-        world.follow(data, pointer_rot_trans);
+        world.follow(data, pointer_rot_trans, Some(pointer_rot_trans));
 
         [pointer, pointer_rot_trans]
     }
