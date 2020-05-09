@@ -352,7 +352,7 @@ impl SimpleState for HexBumpyBuilderDemo {
                             break;
                         }
                         if block.ceiling >= next_floor {
-                            if block.floor < next_ceiling {
+                            if block.floor <= next_ceiling {
                                 movement = Movement::Blocked;
                             }
                             break;
