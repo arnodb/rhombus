@@ -7,7 +7,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
-use std::{collections::VecDeque, ops::Deref, sync::Arc};
+use std::{collections::VecDeque, sync::Arc};
 
 pub struct HexSnakeDemo {
     position: CubicVector,
@@ -76,12 +76,7 @@ impl HexSnakeDemo {
 
 impl SimpleState for HexSnakeDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.snakes = vec![
             Self::new_snake(self.position, 1, &mut data, &world),
             Self::new_snake(self.position, 3, &mut data, &world),
@@ -115,12 +110,7 @@ impl SimpleState for HexSnakeDemo {
     }
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         let delta_millis = {
             let duration = data.world.read_resource::<Time>().delta_time();
             duration.as_secs() * 1000 + u64::from(duration.subsec_millis())

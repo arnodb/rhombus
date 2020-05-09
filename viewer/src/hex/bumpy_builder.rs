@@ -17,7 +17,6 @@ use amethyst::{
 use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ops::Deref,
     sync::Arc,
 };
 
@@ -123,6 +122,8 @@ impl HexBumpyBuilderDemo {
             .with(color_data.material)
             .with(transform)
             .build();
+
+        world.follow(data, pointer_rot_trans);
 
         [pointer, pointer_rot_trans]
     }
@@ -231,11 +232,7 @@ impl HexBumpyBuilderDemo {
 
 impl SimpleState for HexBumpyBuilderDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer_entities.extend(&Self::create_pointer(
             &mut data,
             &world,
@@ -278,11 +275,7 @@ impl SimpleState for HexBumpyBuilderDemo {
     ) -> SimpleTrans {
         if let StateEvent::Window(event) = event {
             let mut trans = Trans::None;
-            let world = data
-                .world
-                .read_resource::<Arc<RhombusViewerWorld>>()
-                .deref()
-                .clone();
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
             match get_key(&event) {
                 Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
                     trans = Trans::Pop;

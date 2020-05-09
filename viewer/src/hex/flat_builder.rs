@@ -10,7 +10,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
-use std::{collections::BTreeMap, ops::Deref, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum HexState {
@@ -81,6 +81,8 @@ impl HexFlatBuilderDemo {
             .with(color_data.material)
             .with(transform)
             .build();
+
+        world.follow(data, pointer_rot_trans);
 
         [pointer, pointer_rot_trans]
     }
@@ -170,11 +172,7 @@ impl HexFlatBuilderDemo {
 
 impl SimpleState for HexFlatBuilderDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer_entities.extend(&Self::create_pointer(
             &mut data,
             &world,
@@ -208,11 +206,7 @@ impl SimpleState for HexFlatBuilderDemo {
     ) -> SimpleTrans {
         if let StateEvent::Window(event) = event {
             let mut trans = Trans::None;
-            let world = data
-                .world
-                .read_resource::<Arc<RhombusViewerWorld>>()
-                .deref()
-                .clone();
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
             match get_key(&event) {
                 Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
                     trans = Trans::Pop;

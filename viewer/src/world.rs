@@ -1,5 +1,5 @@
-use crate::assets::RhombusViewerAssets;
-use amethyst::core::Transform;
+use crate::{assets::RhombusViewerAssets, systems::follow_me::FollowMeTag};
+use amethyst::{core::Transform, ecs::prelude::*, prelude::*};
 use rhombus_core::{
     dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
 };
@@ -7,6 +7,8 @@ use rhombus_core::{
 #[derive(Debug)]
 pub struct RhombusViewerWorld {
     pub assets: RhombusViewerAssets,
+    pub origin: Entity,
+    pub follower: Entity,
 }
 
 impl RhombusViewerWorld {
@@ -31,6 +33,14 @@ impl RhombusViewerWorld {
             -(1.0 + small2) * depth as f32,
             -1.5 * row as f32 - depth as f32 / 2.0,
         );
+    }
+
+    pub fn follow(&self, data: &StateData<'_, GameData<'_, '_>>, target: Entity) {
+        let mut follow_me_storage = data.world.write_storage::<FollowMeTag>();
+        follow_me_storage.get_mut(self.follower).and_then(|tag| {
+            tag.target = target;
+            Some(())
+        });
     }
 }
 

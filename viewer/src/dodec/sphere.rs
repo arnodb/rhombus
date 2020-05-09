@@ -7,7 +7,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::dodec::coordinates::quadric::QuadricVector;
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 pub struct DodecSphereDemo {
     position: QuadricVector,
@@ -27,12 +27,7 @@ impl DodecSphereDemo {
 
 impl SimpleState for DodecSphereDemo {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         for radius in &self.spheres {
             for dodec in self.position.sphere_iter(*radius) {
                 let pos = dodec.into();

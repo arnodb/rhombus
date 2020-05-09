@@ -5,6 +5,7 @@ pub mod assets;
 pub mod dodec;
 pub mod hex;
 pub mod snake;
+pub mod systems;
 pub mod world;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
         bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
         flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
     },
+    systems::follow_me::{FollowMeSystem, FollowMeTag},
     world::RhombusViewerWorld,
 };
 use amethyst::{
@@ -72,6 +74,7 @@ struct RhombusViewer {
     last_resume_time: f64,
     progress_counter: ProgressCounter,
     origin: Option<Entity>,
+    follower: Option<Entity>,
 }
 
 impl RhombusViewer {
@@ -90,6 +93,7 @@ impl RhombusViewer {
             last_resume_time: 0.0,
             progress_counter: ProgressCounter::default(),
             origin: None,
+            follower: None,
         }
     }
 
@@ -140,7 +144,7 @@ impl SimpleState for RhombusViewer {
                 .with(debug_lines_component)
                 .build();
         }
-        {
+        let assets = {
             let hex_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
                 loader.load("mesh/hex.obj", ObjFormat, &mut self.progress_counter)
             });
@@ -185,15 +189,14 @@ impl SimpleState for RhombusViewer {
                 (*color, ColorData { texture, material })
             })
             .collect::<HashMap<_, _>>();
-            data.world.insert(Arc::new(RhombusViewerWorld {
-                assets: RhombusViewerAssets {
-                    hex_handle,
-                    dodec_handle,
-                    pointer_handle,
-                    color_data,
-                },
-            }));
-        }
+
+            RhombusViewerAssets {
+                hex_handle,
+                dodec_handle,
+                pointer_handle,
+                color_data,
+            }
+        };
 
         let light: Light = PointLight {
             intensity: 30.0,
@@ -219,6 +222,21 @@ impl SimpleState for RhombusViewer {
             .build();
         self.origin = Some(origin);
 
+        let follower = data
+            .world
+            .create_entity()
+            .with(Transform::default())
+            .with(FollowMeTag { target: origin })
+            .build();
+        self.follower = Some(follower);
+
+        let world = Arc::new(RhombusViewerWorld {
+            assets,
+            origin,
+            follower,
+        });
+        data.world.insert(world);
+
         let mut transform = Transform::default();
         transform.append_translation_xyz(-6.0, 15.0, 9.0);
         transform.face_towards(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
@@ -237,13 +255,16 @@ impl SimpleState for RhombusViewer {
             .with(transform)
             .with(FlyControlTag)
             .with(ArcBallControlTag {
-                target: origin,
+                target: follower,
                 distance: 15.0,
             })
             .build();
     }
 
     fn on_stop(&mut self, data: StateData<'_, GameData<'_, '_>>) {
+        if let Some(follower) = self.follower.take() {
+            data.world.delete_entity(follower).expect("delete entity");
+        }
         if let Some(origin) = self.origin.take() {
             data.world.delete_entity(origin).expect("delete entity");
         }
@@ -254,6 +275,8 @@ impl SimpleState for RhombusViewer {
             .world
             .read_resource::<Time>()
             .absolute_real_time_seconds();
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        world.follow(&data, world.origin);
     }
 
     fn handle_event(
@@ -373,6 +396,7 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(TransformBundle::new())?
         //.with_bundle(amethyst::utils::fps_counter::FpsCounterBundle)?
         .with_bundle(ArcBallControlBundle::<StringBindings>::new())?
+        .with(FollowMeSystem, "follow_me_system", &["arc_ball_rotation"])
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(

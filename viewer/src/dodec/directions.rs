@@ -7,7 +7,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::dodec::coordinates::quadric::QuadricVector;
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 pub struct DodecDirectionsDemo {
     position: QuadricVector,
@@ -53,11 +53,7 @@ impl DodecDirectionsDemo {
 
 impl SimpleState for DodecDirectionsDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
 
         self.create_direction(&mut data, &world, 0, 3, Color::Red);
         self.create_direction(&mut data, &world, 6, 2, Color::Red);

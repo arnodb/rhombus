@@ -7,7 +7,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::dodec::coordinates::quadric::{QuadricVector, SphereIter};
-use std::{collections::VecDeque, ops::Deref, sync::Arc};
+use std::{collections::VecDeque, sync::Arc};
 
 pub struct DodecSnakeDemo {
     position: QuadricVector,
@@ -76,12 +76,7 @@ impl DodecSnakeDemo {
 
 impl SimpleState for DodecSnakeDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.snakes = vec![Self::new_snake(self.position, 2, &mut data, &world)];
         self.remaining_millis = 0;
     }
@@ -112,12 +107,7 @@ impl SimpleState for DodecSnakeDemo {
     }
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         let delta_millis = {
             let duration = data.world.read_resource::<Time>().delta_time();
             duration.as_secs() * 1000 + u64::from(duration.subsec_millis())

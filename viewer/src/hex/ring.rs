@@ -7,7 +7,7 @@ use amethyst::{
     winit::VirtualKeyCode,
 };
 use rhombus_core::hex::coordinates::cubic::CubicVector;
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 pub struct HexRingDemo {
     position: CubicVector,
@@ -27,12 +27,7 @@ impl HexRingDemo {
 
 impl SimpleState for HexRingDemo {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
-        let world = data
-            .world
-            .read_resource::<Arc<RhombusViewerWorld>>()
-            .deref()
-            .clone();
-
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         for radius in &self.rings {
             for hex in self.position.ring_iter(*radius) {
                 let mut transform = Transform::default();
