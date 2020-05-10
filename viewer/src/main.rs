@@ -15,8 +15,9 @@ use crate::{
         bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
         flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
     },
-    systems::follow_me::{
-        FollowMeSystem, FollowMeTag, FollowMyRotationSystem, FollowMyRotationTag,
+    systems::{
+        camera_distance::CameraDistanceSystemDesc,
+        follow_me::{FollowMeSystem, FollowMeTag, FollowMyRotationSystem, FollowMyRotationTag},
     },
     world::RhombusViewerWorld,
 };
@@ -29,7 +30,7 @@ use amethyst::{
         transform::{Parent, Transform, TransformBundle},
     },
     ecs::prelude::*,
-    input::{is_key_down, StringBindings},
+    input::{is_key_down, InputBundle, StringBindings},
     prelude::*,
     renderer::{
         camera::{Camera, Perspective, Projection},
@@ -436,13 +437,18 @@ fn main() -> amethyst::Result<()> {
     use amethyst::renderer::plugins::RenderDebugLines;
     let game_data = GameDataBuilder::default()
         .with_bundle(TransformBundle::new())?
-        //.with_bundle(amethyst::utils::fps_counter::FpsCounterBundle)?
+        .with_bundle(InputBundle::<StringBindings>::new())?
         .with_bundle(ArcBallControlBundle::<StringBindings>::new())?
         .with(FollowMeSystem, "follow_me_system", &["arc_ball_rotation"])
         .with(
             FollowMyRotationSystem,
             "follow_my_rotation_system",
             &["arc_ball_rotation"],
+        )
+        .with_system_desc(
+            CameraDistanceSystemDesc::default(),
+            "camera_distance_system",
+            &["input_system"],
         )
         .with_bundle(
             RenderingBundle::<DefaultBackend>::new()
