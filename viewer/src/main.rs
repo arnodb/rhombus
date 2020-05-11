@@ -12,8 +12,9 @@ use crate::{
     assets::{Color, ColorData, RhombusViewerAssets},
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
     hex::{
-        bumpy_builder::HexBumpyBuilderDemo, directions::HexDirectionsDemo,
-        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
+        bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
+        directions::HexDirectionsDemo, flat_builder::HexFlatBuilderDemo, ring::HexRingDemo,
+        snake::HexSnakeDemo,
     },
     systems::{
         camera_distance::CameraDistanceSystemDesc,
@@ -66,6 +67,7 @@ const DEMO_DODEC_SNAKE: usize = 5;
 
 const HEX_FLAT_BUILDER: usize = 100;
 const HEX_BUMPY_BUILDER: usize = 101;
+const HEX_CELLULAR_BUILDER: usize = 102;
 
 enum RhombusViewerAnimation {
     Fixed { demo_num: usize },
@@ -113,6 +115,8 @@ impl RhombusViewer {
             HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new()),
             // Bumpy hex builders
             HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
+            // Cellular hex builders
+            HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new()),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
@@ -417,6 +421,8 @@ enum DemoOption {
     HexFlatBuilder = HEX_FLAT_BUILDER as isize,
     #[structopt(name = "hex-bumpy-builder")]
     HexBumpyBuilder = HEX_BUMPY_BUILDER as isize,
+    #[structopt(name = "hex-cellular-builder")]
+    HexCellularBuilder = HEX_CELLULAR_BUILDER as isize,
 }
 
 #[derive(StructOpt, Debug)]

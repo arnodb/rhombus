@@ -48,8 +48,13 @@ directions, ring/sphere, ring/sphere iteration.
 
 This project would never have been born without this awesome document about hexagonal grids:
 
-* **Hexagonal Grids**: https://www.redblobgames.com/grids/hexagons/
+* **Hexagonal Grids** (2013-2019): https://www.redblobgames.com/grids/hexagons/
 
 It describes in a very clear way the coordinate systems that can be used to position something in
 a 2D hexagonal world and more importantly how you can describe movements, rings, basic field of
 view, path finding and even more.
+
+All sources of information:
+
+* **Hexagonal Grids** (2013-2019): https://www.redblobgames.com/grids/hexagons/
+* **The Cellular Automaton Method for Cave Generation** (2012): https://jeremykun.com/2012/07/29/the-cellular-automaton-method-for-cave-generation/

@@ -1,4 +1,5 @@
 pub mod bumpy_builder;
+pub mod cellular;
 pub mod directions;
 pub mod flat_builder;
 pub mod ring;
