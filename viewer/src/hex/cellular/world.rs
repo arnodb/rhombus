@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 const HEX_SCALE_HORIZONTAL: f32 = 0.8;
 const GROUND_HEX_SCALE_VERTICAL: f32 = 0.1;
-const WALL_HEX_SCALE_VERTICAL: f32 = 0.3;
+const WALL_HEX_SCALE_VERTICAL: f32 = 1.0;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HexState {

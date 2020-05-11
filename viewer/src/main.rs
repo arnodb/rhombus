@@ -48,6 +48,7 @@ use amethyst::{
     winit::VirtualKeyCode,
     Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
+use rhombus_core::hex::coordinates::cubic::CubicVector;
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 use structopt::StructOpt;
 
@@ -205,22 +206,36 @@ impl SimpleState for RhombusViewer {
             }
         };
 
-        let light: Light = PointLight {
-            intensity: 30.0,
-            color: Srgb::new(1.0, 1.0, 1.0),
-            radius: 5.0,
-            smoothness: 4.0,
+        for r in 0..4 {
+            for pos in CubicVector::new(0, 0, 0)
+                .ring_iter(r * 24)
+                .step_by(if r != 0 { 24 } else { 1 })
+            {
+                let light: Light = PointLight {
+                    intensity: 30.0,
+                    color: Srgb::new(1.0, 1.0, 1.0),
+                    radius: 5.0,
+                    smoothness: 4.0,
+                }
+                .into();
+
+                let mut light_transform = Transform::default();
+
+                let col = pos.x() + (pos.z() - (pos.z() & 1)) / 2;
+                let row = pos.z();
+                light_transform.set_translation_xyz(
+                    f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
+                    10.0,
+                    -row as f32 * 1.5,
+                );
+
+                data.world
+                    .create_entity()
+                    .with(light)
+                    .with(light_transform)
+                    .build();
+            }
         }
-        .into();
-
-        let mut light_transform = Transform::default();
-        light_transform.set_translation_xyz(0.0, 10.0, 0.0);
-
-        data.world
-            .create_entity()
-            .with(light)
-            .with(light_transform)
-            .build();
 
         // Origin with default orientation
         let origin = data
@@ -402,7 +417,7 @@ fn logger_setup(logger_config_path: Option<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone, Copy)]
 enum DemoOption {
     #[structopt(name = "hex-directions")]
     HexDirections = DEMO_HEX_DIRECTIONS as isize,
@@ -440,7 +455,11 @@ fn main() -> amethyst::Result<()> {
 
     logger_setup(None)?;
 
-    use amethyst::renderer::plugins::RenderDebugLines;
+    let draw_axes = options
+        .demo
+        .map(|demo| demo as usize <= MAX_ROTATED_DEMOS)
+        .unwrap_or(true);
+
     let game_data = GameDataBuilder::default()
         .with_bundle(TransformBundle::new())?
         .with_bundle(InputBundle::<StringBindings>::new())?
@@ -456,15 +475,19 @@ fn main() -> amethyst::Result<()> {
             "camera_distance_system",
             &["input_system"],
         )
-        .with_bundle(
-            RenderingBundle::<DefaultBackend>::new()
+        .with_bundle({
+            let mut rendering = RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(
                     RenderToWindow::from_config_path(display_config_path)?
                         .with_clear([0.05, 0.05, 0.05, 1.0]),
                 )
-                .with_plugin(RenderShaded3D::default())
-                .with_plugin(RenderDebugLines::default()),
-        )?;
+                .with_plugin(RenderShaded3D::default());
+            if draw_axes {
+                use amethyst::renderer::plugins::RenderDebugLines;
+                rendering = rendering.with_plugin(RenderDebugLines::default());
+            }
+            rendering
+        })?;
 
     let app = RhombusViewer::new(options.demo.map(|demo| demo as usize));
 
