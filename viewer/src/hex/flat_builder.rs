@@ -155,7 +155,7 @@ impl HexFlatBuilderDemo {
         }
     }
 
-    fn wallize(
+    fn raise_wall(
         &mut self,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &Arc<RhombusViewerWorld>,
@@ -234,13 +234,13 @@ impl SimpleState for HexFlatBuilderDemo {
                         HexState::Open => {
                             if new {
                                 // Left
-                                self.wallize(
+                                self.raise_wall(
                                     &mut data,
                                     &world,
                                     self.position.neighbor((self.direction + 1) % 6),
                                 );
                                 // Right
-                                self.wallize(
+                                self.raise_wall(
                                     &mut data,
                                     &world,
                                     self.position.neighbor((self.direction + 5) % 6),
@@ -259,11 +259,11 @@ impl SimpleState for HexFlatBuilderDemo {
                                         .map(|h| h.state),
                                 ) {
                                     (Some(HexState::Open), _, _) | (_, _, Some(HexState::Open)) => {
-                                        self.wallize(&mut data, &world, ahead);
+                                        self.raise_wall(&mut data, &world, ahead);
                                     }
                                     (_, Some(HexState::Open), _) => {
-                                        self.wallize(&mut data, &world, ahead_left);
-                                        self.wallize(&mut data, &world, ahead_right);
+                                        self.raise_wall(&mut data, &world, ahead_left);
+                                        self.raise_wall(&mut data, &world, ahead_right);
                                     }
                                     _ => {}
                                 }

@@ -44,10 +44,9 @@ impl RhombusViewerWorld {
         rotation_target: Option<Entity>,
     ) {
         let mut follow_me_storage = data.world.write_storage::<FollowMeTag>();
-        follow_me_storage.get_mut(self.follower).and_then(|tag| {
+        follow_me_storage.get_mut(self.follower).map(|tag| {
             tag.target = Some((target, 0.1));
             tag.rotation_target = rotation_target.map(|t| (t, 0.1));
-            Some(())
         });
         if rotation_target.is_some() {
             let mut transform_storage = data.world.write_storage::<Transform>();
@@ -58,18 +57,14 @@ impl RhombusViewerWorld {
             if let Some(rotation) = rotation {
                 transform_storage
                     .get_mut(self.follower_camera)
-                    .and_then(|transform| {
+                    .map(|transform| {
                         *transform.rotation_mut() = rotation;
-                        Some(())
                     });
             }
         }
-        follow_me_storage
-            .get_mut(self.follower_camera)
-            .and_then(|tag| {
-                tag.rotation_target = rotation_target.map(|_| (self.origin_camera, 0.01));
-                Some(())
-            });
+        follow_me_storage.get_mut(self.follower_camera).map(|tag| {
+            tag.rotation_target = rotation_target.map(|_| (self.origin_camera, 0.01));
+        });
     }
 }
 
