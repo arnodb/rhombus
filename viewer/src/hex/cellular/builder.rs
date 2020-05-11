@@ -31,14 +31,18 @@ impl HexCellularBuilder {
             state: CellularState::Expanded,
         }
     }
+
+    fn reset(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        self.world
+            .reset_world(self.world_radius, self.cell_radius, 0.5, data);
+        self.state = CellularState::Moving;
+        self.remaining_millis = 0;
+    }
 }
 
 impl SimpleState for HexCellularBuilder {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        self.world
-            .reset_world(self.world_radius, self.cell_radius, 0.5, &mut data);
-        self.state = CellularState::Moving;
-        self.remaining_millis = 0;
+        self.reset(&mut data);
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
@@ -57,10 +61,31 @@ impl SimpleState for HexCellularBuilder {
                     trans = Trans::Pop;
                 }
                 Some((VirtualKeyCode::N, ElementState::Pressed)) => {
-                    self.world
-                        .reset_world(self.world_radius, self.cell_radius, 0.5, &mut data);
-                    self.state = CellularState::Moving;
-                    self.remaining_millis = 0;
+                    self.reset(&mut data);
+                }
+                Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
+                    if self.cell_radius < 12 {
+                        self.cell_radius += 1;
+                        self.reset(&mut data);
+                    }
+                }
+                Some((VirtualKeyCode::Down, ElementState::Pressed)) => {
+                    if self.cell_radius > 0 {
+                        self.cell_radius -= 1;
+                        self.reset(&mut data);
+                    }
+                }
+                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                    if self.world_radius < 42 {
+                        self.world_radius += 1;
+                        self.reset(&mut data);
+                    }
+                }
+                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                    if self.world_radius > 0 {
+                        self.world_radius -= 1;
+                        self.reset(&mut data);
+                    }
                 }
                 _ => {}
             }

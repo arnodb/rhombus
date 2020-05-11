@@ -113,7 +113,7 @@ impl World {
                                     data,
                                     &world,
                                     cell,
-                                    1.0 + cell_radius as f32,
+                                    (2.0 * cell_radius as f32).max(1.0),
                                 ),
                                 automaton_count: 0,
                             }
@@ -124,7 +124,7 @@ impl World {
                                     data,
                                     &world,
                                     cell,
-                                    1.0 + cell_radius as f32,
+                                    (2.0 * cell_radius as f32).max(1.0),
                                 ),
                                 automaton_count: 0,
                             }
@@ -137,7 +137,12 @@ impl World {
                 .entry(Self::to_world_key(cell))
                 .or_insert_with(|| HexData {
                     state: HexState::HardWall,
-                    entity: Self::create_wall(data, &world, cell, 1.0 + cell_radius as f32),
+                    entity: Self::create_wall(
+                        data,
+                        &world,
+                        cell,
+                        (2.0 * cell_radius as f32).max(1.0),
+                    ),
                     automaton_count: 0,
                 });
         }
@@ -196,7 +201,7 @@ impl World {
                             data,
                             &world,
                             Self::to_position(*key),
-                            1.0 + cell_radius as f32,
+                            (2.0 * cell_radius as f32).max(1.0),
                         );
                         hex_data.state = HexState::Open;
                         frozen = false;
@@ -211,7 +216,7 @@ impl World {
                             data,
                             &world,
                             Self::to_position(*key),
-                            1.0 + cell_radius as f32,
+                            (2.0 * cell_radius as f32).max(1.0),
                         );
                         hex_data.state = HexState::Wall;
                         frozen = false;
