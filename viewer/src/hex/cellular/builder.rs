@@ -1,4 +1,4 @@
-use crate::hex::cellular::world::World;
+use crate::{hex::cellular::world::World, world::RhombusViewerWorld};
 use amethyst::{
     core::timing::Time,
     ecs::prelude::*,
@@ -6,6 +6,7 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
+use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq)]
 enum CellularState {
@@ -42,6 +43,8 @@ impl HexCellularBuilder {
 
 impl SimpleState for HexCellularBuilder {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        world.set_camera_distance(&data, 300.0);
         self.reset(&mut data);
     }
 

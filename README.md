@@ -6,6 +6,8 @@
 
 Hexagonal and Rhombic Dodecahedral worlds project
 
+![Quadric directions](dodec-directions-small.png) ![Cellular cave generator](cellular-small.png)
+
 ## Intention
 
 This is a pet project, I will try to explore every fun idea related in any way to hexagonal

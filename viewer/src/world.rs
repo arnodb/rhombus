@@ -1,5 +1,5 @@
 use crate::{assets::RhombusViewerAssets, systems::follow_me::FollowMeTag};
-use amethyst::{core::Transform, ecs::prelude::*, prelude::*};
+use amethyst::{controls::ArcBallControlTag, core::Transform, ecs::prelude::*, prelude::*};
 use rhombus_core::{
     dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
 };
@@ -65,6 +65,13 @@ impl RhombusViewerWorld {
         follow_me_storage.get_mut(self.follower_camera).map(|tag| {
             tag.rotation_target = rotation_target.map(|_| (self.origin_camera, 0.01));
         });
+    }
+
+    pub fn set_camera_distance(&self, data: &StateData<'_, GameData<'_, '_>>, distance: f32) {
+        let mut arc_ball_control_tag_storage = data.world.write_storage::<ArcBallControlTag>();
+        for mut tag in (&mut arc_ball_control_tag_storage).join() {
+            tag.distance = distance;
+        }
     }
 }
 
