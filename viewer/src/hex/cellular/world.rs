@@ -8,6 +8,10 @@ use rand::{thread_rng, RngCore};
 use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
 use std::{collections::BTreeMap, sync::Arc};
 
+const HEX_SCALE_HORIZONTAL: f32 = 0.8;
+const GROUND_HEX_SCALE_VERTICAL: f32 = 0.1;
+const WALL_HEX_SCALE_VERTICAL: f32 = 0.3;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HexState {
     Open,
@@ -41,10 +45,15 @@ impl World {
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
+        scale: f32,
     ) -> Entity {
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.1, 0.8));
-        let pos = (position, 0.1).into();
+        transform.set_scale(Vector3::new(
+            scale * HEX_SCALE_HORIZONTAL,
+            GROUND_HEX_SCALE_VERTICAL,
+            scale * HEX_SCALE_HORIZONTAL,
+        ));
+        let pos = (position, GROUND_HEX_SCALE_VERTICAL).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].clone();
         data.world
@@ -60,10 +69,15 @@ impl World {
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &Arc<RhombusViewerWorld>,
         position: CubicVector,
+        scale: f32,
     ) -> Entity {
         let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(0.8, 0.3, 0.8));
-        let pos = (position, 0.3).into();
+        transform.set_scale(Vector3::new(
+            scale * HEX_SCALE_HORIZONTAL,
+            WALL_HEX_SCALE_VERTICAL,
+            scale * HEX_SCALE_HORIZONTAL,
+        ));
+        let pos = (position, WALL_HEX_SCALE_VERTICAL).into();
         world.transform_cubic(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].clone();
         data.world
@@ -78,8 +92,7 @@ impl World {
     pub fn reset_world(
         &mut self,
         radius: usize,
-        // TODO
-        _cell_radius: usize,
+        cell_radius: usize,
         wall_ratio: f32,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
@@ -87,7 +100,7 @@ impl World {
         self.clear(data);
         let mut rng = thread_rng();
         for r in 0..radius {
-            for cell in CubicVector::new(0, 0, 0).ring_iter(r) {
+            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
                 self.world
                     .entry(Self::to_world_key(cell))
                     .or_insert_with(|| {
@@ -96,25 +109,35 @@ impl World {
                         if is_wall {
                             HexData {
                                 state: HexState::Wall,
-                                entity: Self::create_wall(data, &world, cell),
+                                entity: Self::create_wall(
+                                    data,
+                                    &world,
+                                    cell,
+                                    1.0 + cell_radius as f32,
+                                ),
                                 automaton_count: 0,
                             }
                         } else {
                             HexData {
                                 state: HexState::Open,
-                                entity: Self::create_ground(data, &world, cell),
+                                entity: Self::create_ground(
+                                    data,
+                                    &world,
+                                    cell,
+                                    1.0 + cell_radius as f32,
+                                ),
                                 automaton_count: 0,
                             }
                         }
                     });
             }
         }
-        for cell in CubicVector::new(0, 0, 0).ring_iter(radius) {
+        for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, radius) {
             self.world
                 .entry(Self::to_world_key(cell))
                 .or_insert_with(|| HexData {
                     state: HexState::HardWall,
-                    entity: Self::create_wall(data, &world, cell),
+                    entity: Self::create_wall(data, &world, cell, 1.0 + cell_radius as f32),
                     automaton_count: 0,
                 });
         }
@@ -130,8 +153,7 @@ impl World {
     pub fn apply_cellular_automaton<RaiseF, RemainF>(
         &mut self,
         radius: usize,
-        // TODO
-        _cell_radius: usize,
+        cell_radius: usize,
         raise_wall_test: RaiseF,
         remain_wall_test: RemainF,
         data: &mut StateData<'_, GameData<'_, '_>>,
@@ -144,26 +166,14 @@ impl World {
             hex_data.1.automaton_count = 0;
         }
         for r in 0..=radius {
-            for cell in CubicVector::new(0, 0, 0).ring_iter(r) {
-                let hex_data = self.world.get(&Self::to_world_key(cell));
-                let is_wall = match hex_data {
-                    Some(HexData {
-                        state: HexState::Wall,
-                        ..
-                    })
-                    | Some(HexData {
-                        state: HexState::HardWall,
-                        ..
-                    }) => true,
-                    Some(HexData {
-                        state: HexState::Open,
-                        ..
-                    }) => false,
-                    None => unreachable!(""),
+            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
+                let hex_state = self.world.get(&Self::to_world_key(cell)).unwrap().state;
+                let is_wall = match hex_state {
+                    HexState::Wall | HexState::HardWall => true,
+                    HexState::Open => false,
                 };
                 if is_wall {
-                    for dir in 0..6 {
-                        let neighbor = cell + CubicVector::direction(dir);
+                    for neighbor in cell.big_ring_iter(cell_radius, 1) {
                         self.world
                             .get_mut(&Self::to_world_key(neighbor))
                             .map(|hex_data| {
@@ -182,8 +192,12 @@ impl World {
                         data.world
                             .delete_entity(hex_data.entity)
                             .expect("delete entity");
-                        hex_data.entity =
-                            Self::create_ground(data, &world, Self::to_position(*key));
+                        hex_data.entity = Self::create_ground(
+                            data,
+                            &world,
+                            Self::to_position(*key),
+                            1.0 + cell_radius as f32,
+                        );
                         hex_data.state = HexState::Open;
                         frozen = false;
                     }
@@ -193,7 +207,12 @@ impl World {
                         data.world
                             .delete_entity(hex_data.entity)
                             .expect("delete entity");
-                        hex_data.entity = Self::create_wall(data, &world, Self::to_position(*key));
+                        hex_data.entity = Self::create_wall(
+                            data,
+                            &world,
+                            Self::to_position(*key),
+                            1.0 + cell_radius as f32,
+                        );
                         hex_data.state = HexState::Wall;
                         frozen = false;
                     }
@@ -206,13 +225,55 @@ impl World {
 
     pub fn expand(
         &mut self,
-        _radius: usize,
+        radius: usize,
         cell_radius: usize,
-        _data: &mut StateData<'_, GameData<'_, '_>>,
+        data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
         if cell_radius <= 0 {
             return;
         }
-        todo!();
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        for r in 0..=radius {
+            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
+                let HexData {
+                    state: hex_state,
+                    entity: hex_entity,
+                    ..
+                } = *self.world.get(&Self::to_world_key(cell)).unwrap();
+                let is_wall = match hex_state {
+                    HexState::Wall | HexState::HardWall => true,
+                    HexState::Open => false,
+                };
+                {
+                    let mut transform_storage = data.world.write_storage::<Transform>();
+                    transform_storage.get_mut(hex_entity).map(|transform| {
+                        transform.set_scale(Vector3::new(
+                            HEX_SCALE_HORIZONTAL,
+                            if is_wall {
+                                WALL_HEX_SCALE_VERTICAL
+                            } else {
+                                GROUND_HEX_SCALE_VERTICAL
+                            },
+                            HEX_SCALE_HORIZONTAL,
+                        ))
+                    });
+                }
+                for s in 1..=cell_radius {
+                    for sub_cell in cell.ring_iter(s) {
+                        self.world
+                            .entry(Self::to_world_key(sub_cell))
+                            .or_insert_with(|| HexData {
+                                state: hex_state,
+                                entity: if is_wall {
+                                    Self::create_wall(data, &world, sub_cell, 1.0)
+                                } else {
+                                    Self::create_ground(data, &world, sub_cell, 1.0)
+                                },
+                                automaton_count: 0,
+                            });
+                    }
+                }
+            }
+        }
     }
 }

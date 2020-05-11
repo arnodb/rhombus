@@ -26,7 +26,7 @@ impl HexCellularBuilder {
         Self {
             world: World::default(),
             world_radius: 12,
-            cell_radius: 0,
+            cell_radius: 2,
             remaining_millis: 0,
             state: CellularState::Expanded,
         }

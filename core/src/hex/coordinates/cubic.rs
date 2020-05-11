@@ -41,6 +41,10 @@ impl CubicVector {
     pub fn ring_iter(&self, radius: usize) -> RingIter {
         RingIter::new(radius, *self)
     }
+
+    pub fn big_ring_iter(&self, cell_radius: usize, radius: usize) -> BigRingIter {
+        BigRingIter::new(cell_radius, radius, *self)
+    }
 }
 
 impl Mul<isize> for CubicVector {
@@ -111,7 +115,7 @@ impl RingIter {
     }
 
     pub fn peek(&mut self) -> Option<&CubicVector> {
-        if self.direction < 6 {
+        if self.direction < NUM_DIRECTIONS {
             Some(&self.next)
         } else {
             None
@@ -125,7 +129,7 @@ impl Iterator for RingIter {
     fn next(&mut self) -> Option<Self::Item> {
         let edge_length = self.edge_length;
         let direction = self.direction;
-        if direction < 6 {
+        if direction < NUM_DIRECTIONS {
             let next = self.next;
             self.next = next.neighbor(direction);
             let ei = self.edge_index;
@@ -134,8 +138,86 @@ impl Iterator for RingIter {
             } else {
                 self.edge_index = 1;
                 self.direction = direction + 1;
-                while self.direction < 6 && edge_length == 0 {
+                while self.direction < NUM_DIRECTIONS && edge_length == 0 {
                     self.direction += 1;
+                }
+            }
+            Some(next)
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let el = self.edge_length;
+        if el > 0 {
+            let length = el * 6;
+            (length, Some(length))
+        } else {
+            (1, Some(1))
+        }
+    }
+}
+
+pub struct BigRingIter {
+    edge_length: usize,
+    direction: usize,
+    direction_vector: CubicVector,
+    next: CubicVector,
+    edge_index: usize,
+    cell_radius: usize,
+}
+
+impl BigRingIter {
+    fn new(cell_radius: usize, radius: usize, center: CubicVector) -> Self {
+        let direction_vector = CubicVector::direction(0) * (cell_radius as isize + 1)
+            + CubicVector::direction(1) * cell_radius as isize;
+        let next = center
+            + radius as isize
+                * (CubicVector::direction(4) * (cell_radius as isize + 1)
+                    + CubicVector::direction(5) * cell_radius as isize);
+        Self {
+            edge_length: radius,
+            direction: 0,
+            direction_vector,
+            next,
+            edge_index: 1,
+            cell_radius,
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<&CubicVector> {
+        if self.direction < 6 {
+            Some(&self.next)
+        } else {
+            None
+        }
+    }
+}
+
+impl Iterator for BigRingIter {
+    type Item = CubicVector;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let edge_length = self.edge_length;
+        let direction = self.direction;
+        if direction < 6 {
+            let next = self.next;
+            self.next = next + self.direction_vector;
+            let ei = self.edge_index;
+            if ei < edge_length {
+                self.edge_index = ei + 1;
+            } else {
+                self.edge_index = 1;
+                self.direction = direction + 1;
+                while self.direction < NUM_DIRECTIONS && edge_length == 0 {
+                    self.direction += 1;
+                }
+                if self.direction < 6 {
+                    self.direction_vector = CubicVector::direction(self.direction)
+                        * (self.cell_radius as isize + 1)
+                        + CubicVector::direction((self.direction + 1) % NUM_DIRECTIONS)
+                            * self.cell_radius as isize;
                 }
             }
             Some(next)
