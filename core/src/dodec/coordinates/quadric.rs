@@ -2,7 +2,7 @@ use crate::vector::Vector4ISize;
 use derive_more::Add;
 use std::ops::Mul;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
 pub struct QuadricVector(Vector4ISize);
 
 impl QuadricVector {
@@ -382,7 +382,7 @@ fn test_all_directions_have_opposite() {
     for dir in 0..NUM_DIRECTIONS / 2 {
         assert_eq!(
             DIRECTIONS[dir] + DIRECTIONS[dir + NUM_DIRECTIONS / 2],
-            QuadricVector::new(0, 0, 0, 0)
+            QuadricVector::default()
         );
     }
 }
@@ -397,7 +397,7 @@ fn test_neighbor() {
 
 #[cfg(test)]
 fn do_test_sphere_iter(radius: usize, expected: &Vec<QuadricVector>) {
-    let center = QuadricVector::new(0, 0, 0, 0);
+    let center = QuadricVector::default();
     let mut iter = center.sphere_iter(radius);
     let mut peeked = iter.peek().cloned();
     assert!(peeked.is_some());
@@ -422,7 +422,7 @@ fn do_test_sphere_iter(radius: usize, expected: &Vec<QuadricVector>) {
 
 #[test]
 fn test_sphere_iter0() {
-    do_test_sphere_iter(0, &vec![QuadricVector::new(0, 0, 0, 0)]);
+    do_test_sphere_iter(0, &vec![QuadricVector::default()]);
 }
 
 #[test]
@@ -501,9 +501,7 @@ fn test_sphere_iter2() {
 fn test_sphere_iter4() {
     println!(
         "{:?}",
-        QuadricVector::new(0, 0, 0, 0)
-            .sphere_iter(4)
-            .collect::<Vec<_>>()
+        QuadricVector::default().sphere_iter(4).collect::<Vec<_>>()
     );
     do_test_sphere_iter(
         4,

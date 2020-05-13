@@ -207,7 +207,7 @@ impl SimpleState for RhombusViewer {
         };
 
         for r in 0..4 {
-            for pos in CubicVector::new(0, 0, 0)
+            for pos in CubicVector::default()
                 .ring_iter(r * 24)
                 .step_by(if r != 0 { 24 } else { 1 })
             {

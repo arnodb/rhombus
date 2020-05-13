@@ -17,7 +17,7 @@ pub struct HexDirectionsDemo {
 impl HexDirectionsDemo {
     pub fn new() -> Self {
         Self {
-            position: CubicVector::new(0, 0, 0),
+            position: CubicVector::default(),
             entities: Vec::new(),
         }
     }

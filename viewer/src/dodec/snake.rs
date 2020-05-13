@@ -18,7 +18,7 @@ pub struct DodecSnakeDemo {
 impl DodecSnakeDemo {
     pub fn new() -> Self {
         Self {
-            position: QuadricVector::new(0, 0, 0, 0),
+            position: QuadricVector::default(),
             snakes: Vec::new(),
             remaining_millis: 0,
         }

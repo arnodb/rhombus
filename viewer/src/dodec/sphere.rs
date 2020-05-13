@@ -18,7 +18,7 @@ pub struct DodecSphereDemo {
 impl DodecSphereDemo {
     pub fn new() -> Self {
         Self {
-            position: QuadricVector::new(0, 0, 0, 0),
+            position: QuadricVector::default(),
             spheres: vec![2],
             entities: Vec::new(),
         }

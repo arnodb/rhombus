@@ -2,7 +2,7 @@ use crate::{hex::coordinates::axial::AxialVector, vector::Vector3ISize};
 use derive_more::Add;
 use std::ops::{Mul, MulAssign};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
 pub struct CubicVector(Vector3ISize);
 
 impl CubicVector {
@@ -327,7 +327,7 @@ fn test_all_directions_have_opposite() {
     for dir in 0..NUM_DIRECTIONS / 2 {
         assert_eq!(
             DIRECTIONS[dir] + DIRECTIONS[dir + NUM_DIRECTIONS / 2],
-            CubicVector::new(0, 0, 0)
+            CubicVector::default()
         );
     }
 }
@@ -342,7 +342,7 @@ fn test_neighbor() {
 
 #[cfg(test)]
 fn do_test_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
-    let center = CubicVector::new(0, 0, 0);
+    let center = CubicVector::default();
     let mut iter = center.ring_iter(radius);
     let mut peeked = iter.peek().cloned();
     assert!(peeked.is_some());
@@ -367,7 +367,7 @@ fn do_test_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
 
 #[test]
 fn test_ring_iter0() {
-    do_test_ring_iter(0, &vec![CubicVector::new(0, 0, 0)]);
+    do_test_ring_iter(0, &vec![CubicVector::default()]);
 }
 
 #[test]

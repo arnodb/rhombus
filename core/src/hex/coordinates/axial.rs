@@ -1,6 +1,6 @@
 use crate::{hex::coordinates::cubic::CubicVector, vector::Vector2ISize};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Add, Sub)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, Sub)]
 pub struct AxialVector(Vector2ISize);
 
 impl AxialVector {

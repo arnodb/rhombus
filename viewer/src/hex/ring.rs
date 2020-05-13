@@ -18,7 +18,7 @@ pub struct HexRingDemo {
 impl HexRingDemo {
     pub fn new() -> Self {
         Self {
-            position: CubicVector::new(0, 0, 0),
+            position: CubicVector::default(),
             rings: vec![2],
             entities: Vec::new(),
         }

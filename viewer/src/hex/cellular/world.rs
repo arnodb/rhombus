@@ -100,7 +100,7 @@ impl World {
         self.clear(data);
         let mut rng = thread_rng();
         for r in 0..radius {
-            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
+            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
                 self.world
                     .entry(Self::to_world_key(cell))
                     .or_insert_with(|| {
@@ -132,7 +132,7 @@ impl World {
                     });
             }
         }
-        for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, radius) {
+        for cell in CubicVector::default().big_ring_iter(cell_radius, radius) {
             self.world
                 .entry(Self::to_world_key(cell))
                 .or_insert_with(|| HexData {
@@ -171,7 +171,7 @@ impl World {
             hex_data.1.automaton_count = 0;
         }
         for r in 0..=radius {
-            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
+            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
                 let hex_state = self.world.get(&Self::to_world_key(cell)).unwrap().state;
                 let is_wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
@@ -239,7 +239,7 @@ impl World {
         }
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         for r in 0..=radius {
-            for cell in CubicVector::new(0, 0, 0).big_ring_iter(cell_radius, r) {
+            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
                 let HexData {
                     state: hex_state,
                     entity: hex_entity,
