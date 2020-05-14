@@ -48,7 +48,7 @@ impl HexBumpyBuilderDemo {
 
     fn create_floor(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
         floor: isize,
     ) -> Entity {
@@ -70,7 +70,7 @@ impl HexBumpyBuilderDemo {
 
     fn create_ceiling(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
         ceiling: isize,
     ) -> Entity {
@@ -112,7 +112,8 @@ impl SimpleState for HexBumpyBuilderDemo {
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        self.pointer.delete_entities(&mut data);
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.pointer.delete_entities(&mut data, &world);
         for block in self.world.iter().flat_map(|(_, vblock)| vblock.iter()) {
             data.world
                 .delete_entity(block.floor_entity)

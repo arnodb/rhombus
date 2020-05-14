@@ -28,7 +28,7 @@ impl DodecSnakeDemo {
         position: QuadricVector,
         radius: usize,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) -> Snake<Entity, SphereIter> {
         let mut state = VecDeque::new();
         let mut iter = Self::snake_center(position).sphere_iter(radius);
@@ -56,7 +56,7 @@ impl DodecSnakeDemo {
     fn push_dodec(
         dodec: QuadricVector,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         color: Color,
     ) -> Entity {
         let pos = dodec.into();

@@ -40,7 +40,7 @@ impl HexFlatBuilderDemo {
 
     fn create_ground(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
     ) -> Entity {
         let mut transform = Transform::default();
@@ -59,7 +59,7 @@ impl HexFlatBuilderDemo {
 
     fn create_wall(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
     ) -> Entity {
         let mut transform = Transform::default();
@@ -79,7 +79,7 @@ impl HexFlatBuilderDemo {
     fn raise_wall(
         &mut self,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
     ) {
         self.world
@@ -105,7 +105,8 @@ impl SimpleState for HexFlatBuilderDemo {
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        self.pointer.delete_entities(&mut data);
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.pointer.delete_entities(&mut data, &world);
         for (_, hex) in &self.world {
             data.world.delete_entity(hex.entity).expect("delete entity");
         }

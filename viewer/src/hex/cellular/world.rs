@@ -1,4 +1,4 @@
-use crate::{assets::Color, world::RhombusViewerWorld};
+use crate::{assets::Color, hex::pointer::HexPointer, world::RhombusViewerWorld};
 use amethyst::{
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
@@ -28,6 +28,7 @@ pub struct HexData {
 #[derive(Default)]
 pub struct World {
     world: BTreeMap<(isize, isize), HexData>,
+    pointer: Option<HexPointer>,
 }
 
 impl World {
@@ -43,7 +44,7 @@ impl World {
 
     fn create_ground(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
         scale: f32,
     ) -> Entity {
@@ -67,7 +68,7 @@ impl World {
 
     fn create_wall(
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         position: CubicVector,
         scale: f32,
     ) -> Entity {
@@ -97,7 +98,7 @@ impl World {
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        self.clear(data);
+        self.clear(data, &world);
         let mut rng = thread_rng();
         for r in 0..radius {
             for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
@@ -148,11 +149,26 @@ impl World {
         }
     }
 
-    pub fn clear(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn clear(
+        &mut self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+    ) {
+        self.delete_pointer(data, world);
         for hex in self.world.values() {
             data.world.delete_entity(hex.entity).expect("delete entity");
         }
         self.world.clear();
+    }
+
+    fn delete_pointer(
+        &mut self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+    ) {
+        if let Some(mut pointer) = self.pointer.take() {
+            pointer.delete_entities(data, world);
+        }
     }
 
     pub fn apply_cellular_automaton<RaiseF, RemainF>(
@@ -278,6 +294,64 @@ impl World {
                             });
                     }
                 }
+            }
+        }
+    }
+
+    fn find_open_cell(&self) -> Option<CubicVector> {
+        let mut r = 0;
+        loop {
+            for cell in CubicVector::default().ring_iter(r) {
+                let cell_data = self.world.get(&Self::to_world_key(cell));
+                match cell_data {
+                    Some(HexData {
+                        state: HexState::Open,
+                        ..
+                    }) => return Some(cell),
+                    Some(..) => (),
+                    None => return None,
+                }
+            }
+            r += 1;
+        }
+    }
+
+    pub fn create_pointer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.delete_pointer(data, &world);
+
+        if let Some(cell) = self.find_open_cell() {
+            let mut pointer = HexPointer::new_with_level_height(1.0);
+            pointer.set_position(cell, 0, data, &world);
+            pointer.create_entities(data, &world);
+            self.pointer = Some(pointer);
+        }
+    }
+
+    pub fn increment_direction(&mut self, data: &StateData<'_, GameData<'_, '_>>) {
+        if let Some(pointer) = &mut self.pointer {
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+            pointer.increment_direction(data, &world);
+        }
+    }
+
+    pub fn decrement_direction(&mut self, data: &StateData<'_, GameData<'_, '_>>) {
+        if let Some(pointer) = &mut self.pointer {
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+            pointer.decrement_direction(data, &world);
+        }
+    }
+
+    pub fn next_position(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if let Some(pointer) = &mut self.pointer {
+            let next = pointer.position().neighbor(pointer.direction());
+            if let Some(HexData {
+                state: HexState::Open,
+                ..
+            }) = self.world.get(&Self::to_world_key(next))
+            {
+                let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+                pointer.set_position(next, 0, data, &world);
             }
         }
     }

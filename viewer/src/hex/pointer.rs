@@ -13,7 +13,6 @@ use amethyst::{
     renderer::{types::Texture, Material},
 };
 use rhombus_core::hex::coordinates::cubic::CubicVector;
-use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum VerticalDirection {
@@ -69,7 +68,7 @@ impl HexPointer {
         position: CubicVector,
         height: isize,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         let update_rot_trans = self.position != position || self.height != height;
 
@@ -99,7 +98,7 @@ impl HexPointer {
     pub fn increment_direction(
         &mut self,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         self.set_direction(
             (self.direction + 1) % 6,
@@ -112,7 +111,7 @@ impl HexPointer {
     pub fn decrement_direction(
         &mut self,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         self.set_direction(
             (self.direction + 5) % 6,
@@ -125,7 +124,7 @@ impl HexPointer {
     pub fn increment_vertical_direction(
         &mut self,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         self.set_direction(
             self.direction,
@@ -141,7 +140,7 @@ impl HexPointer {
     pub fn decrement_vertical_direction(
         &mut self,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         self.set_direction(
             self.direction,
@@ -159,7 +158,7 @@ impl HexPointer {
         direction: usize,
         vertical_direction: VerticalDirection,
         data: &StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         let update_rot_trans =
             self.direction != direction || self.vertical_direction != vertical_direction;
@@ -199,14 +198,19 @@ impl HexPointer {
     pub fn create_entities(
         &mut self,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         if self.entities.is_none() {
             self.entities = Some(self.create_pointer(data, world));
         }
     }
 
-    pub fn delete_entities(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn delete_entities(
+        &mut self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+    ) {
+        world.follow_origin(&data);
         if let Some(entities) = self.entities.take() {
             data.world
                 .delete_entity(entities.pointer)
@@ -220,7 +224,7 @@ impl HexPointer {
     fn create_pointer(
         &self,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) -> HexPointerEntities {
         let mut transform = Transform::default();
         self.set_pointer_rot_trans_transform(&mut transform, world);
@@ -254,7 +258,7 @@ impl HexPointer {
     fn set_pointer_rot_trans_transform(
         &self,
         transform: &mut Transform,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) {
         let pos = (self.position, 0.7 + self.height as f32 * self.level_height).into();
         world.transform_cubic(pos, transform);

@@ -3,14 +3,27 @@ use amethyst::{controls::ArcBallControlTag, core::Transform, ecs::prelude::*, pr
 use rhombus_core::{
     dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
 };
+use std::{
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
 
-#[derive(Debug)]
+#[derive(Debug, new)]
 pub struct RhombusViewerWorld {
     pub assets: RhombusViewerAssets,
     pub origin: Entity,
     pub origin_camera: Entity,
     pub follower: Entity,
     pub follower_camera: Entity,
+
+    #[new(value = "Arc::new(Mutex::new(None))")]
+    follow_mode: Arc<Mutex<Option<(bool, FollowSettings)>>>,
+}
+
+#[derive(Debug)]
+struct FollowSettings {
+    target: Entity,
+    rotation_target: Option<Entity>,
 }
 
 impl RhombusViewerWorld {
@@ -43,12 +56,67 @@ impl RhombusViewerWorld {
         target: Entity,
         rotation_target: Option<Entity>,
     ) {
+        let mut lock = self.follow_mode.lock().unwrap();
+        let mode = lock.deref_mut();
+        *mode = Some((
+            false,
+            FollowSettings {
+                target,
+                rotation_target,
+            },
+        ));
+        self.follow_internal(data, mode.as_mut().unwrap());
+    }
+
+    pub fn follow_origin(&self, data: &StateData<'_, GameData<'_, '_>>) {
+        let mut lock = self.follow_mode.lock().unwrap();
+        let mode = lock.deref_mut();
+        *mode = None;
+        self.follow_internal(
+            data,
+            &mut (
+                true,
+                FollowSettings {
+                    target: self.origin,
+                    rotation_target: None,
+                },
+            ),
+        );
+    }
+
+    pub fn toggle_follow(&self, data: &StateData<'_, GameData<'_, '_>>) {
+        let mut lock = self.follow_mode.lock().unwrap();
+        let mode = lock.deref_mut();
+        if let Some(mode) = mode {
+            mode.0 = !mode.0;
+            if mode.0 {
+                self.follow_internal(
+                    data,
+                    &mut (
+                        true,
+                        FollowSettings {
+                            target: self.origin,
+                            rotation_target: None,
+                        },
+                    ),
+                );
+            } else {
+                self.follow_internal(data, mode);
+            }
+        }
+    }
+
+    fn follow_internal(
+        &self,
+        data: &StateData<'_, GameData<'_, '_>>,
+        mode: &mut (bool, FollowSettings),
+    ) {
         let mut follow_me_storage = data.world.write_storage::<FollowMeTag>();
         follow_me_storage.get_mut(self.follower).map(|tag| {
-            tag.target = Some((target, 0.1));
-            tag.rotation_target = rotation_target.map(|t| (t, 0.1));
+            tag.target = Some((mode.1.target, 0.1));
+            tag.rotation_target = mode.1.rotation_target.map(|t| (t, 0.1));
         });
-        if rotation_target.is_some() {
+        if mode.1.rotation_target.is_some() {
             let mut transform_storage = data.world.write_storage::<Transform>();
             let rotation = transform_storage
                 .get(self.origin_camera)
@@ -63,7 +131,7 @@ impl RhombusViewerWorld {
             }
         }
         follow_me_storage.get_mut(self.follower_camera).map(|tag| {
-            tag.rotation_target = rotation_target.map(|_| (self.origin_camera, 0.01));
+            tag.rotation_target = mode.1.rotation_target.map(|_| (self.origin_camera, 0.01));
         });
     }
 

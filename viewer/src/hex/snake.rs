@@ -28,7 +28,7 @@ impl HexSnakeDemo {
         position: CubicVector,
         radius: usize,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
     ) -> Snake<Entity, RingIter> {
         let mut state = VecDeque::new();
         let mut iter = Self::snake_center(position).ring_iter(radius);
@@ -56,7 +56,7 @@ impl HexSnakeDemo {
     fn push_hex(
         hex: CubicVector,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         color: Color,
     ) -> Entity {
         let mut transform = Transform::default();

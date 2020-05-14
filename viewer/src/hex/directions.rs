@@ -25,7 +25,7 @@ impl HexDirectionsDemo {
     fn create_direction(
         &mut self,
         data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &Arc<RhombusViewerWorld>,
+        world: &RhombusViewerWorld,
         direction: usize,
         length: usize,
         color: Color,

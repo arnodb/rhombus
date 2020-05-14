@@ -49,7 +49,8 @@ impl SimpleState for HexCellularBuilder {
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
-        self.world.clear(&mut data);
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.world.clear(&mut data, &world);
     }
 
     fn handle_event(
@@ -66,29 +67,42 @@ impl SimpleState for HexCellularBuilder {
                 Some((VirtualKeyCode::N, ElementState::Pressed)) => {
                     self.reset(&mut data);
                 }
-                Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key8, ElementState::Pressed)) => {
                     if self.cell_radius < 12 {
                         self.cell_radius += 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Down, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key7, ElementState::Pressed)) => {
                     if self.cell_radius > 0 {
                         self.cell_radius -= 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key0, ElementState::Pressed)) => {
                     if self.world_radius < 42 {
                         self.world_radius += 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key9, ElementState::Pressed)) => {
                     if self.world_radius > 0 {
                         self.world_radius -= 1;
                         self.reset(&mut data);
                     }
+                }
+                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
+                    self.world.increment_direction(&mut data);
+                }
+                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
+                    self.world.decrement_direction(&mut data);
+                }
+                Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
+                    self.world.next_position(&mut data);
+                }
+                Some((VirtualKeyCode::C, ElementState::Pressed)) => {
+                    let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+                    world.toggle_follow(&data);
                 }
                 _ => {}
             }
@@ -121,6 +135,7 @@ impl SimpleState for HexCellularBuilder {
                     );
                     if frozen {
                         self.world.expand(self.world_radius, self.cell_radius, data);
+                        self.world.create_pointer(data);
                         self.state = CellularState::Expanded;
                     }
                 }

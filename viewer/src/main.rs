@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate derive_more;
+#[macro_use]
+extern crate derive_new;
 
 pub mod assets;
 pub mod dodec;
@@ -291,13 +293,13 @@ impl SimpleState for RhombusViewer {
             })
             .build();
 
-        let world = Arc::new(RhombusViewerWorld {
+        let world = Arc::new(RhombusViewerWorld::new(
             assets,
             origin,
             origin_camera,
             follower,
             follower_camera,
-        });
+        ));
         data.world.insert(world);
 
         let mut camera = Camera::standard_3d(WIDTH as f32, HEIGHT as f32);
@@ -337,8 +339,6 @@ impl SimpleState for RhombusViewer {
             .world
             .read_resource::<Time>()
             .absolute_real_time_seconds();
-        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        world.follow(&data, world.origin, None);
     }
 
     fn handle_event(
