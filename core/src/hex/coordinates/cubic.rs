@@ -10,7 +10,21 @@ use crate::{
 use derive_more::Add;
 use std::ops::{Mul, MulAssign};
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+    Debug,
+)]
 pub struct CubicVector(Vector3ISize);
 
 impl CubicVector {

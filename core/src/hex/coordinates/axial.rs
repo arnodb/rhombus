@@ -9,7 +9,21 @@ use crate::{
 };
 use std::ops::{Mul, MulAssign};
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+    Debug,
+)]
 pub struct AxialVector(Vector2ISize);
 
 impl AxialVector {

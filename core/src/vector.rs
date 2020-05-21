@@ -3,7 +3,7 @@ use std::ops::{Mul, MulAssign};
 macro_rules! define_vector {
     ($name:ident, $($fields:ident),+) => {
 
-        #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+        #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Add, AddAssign, Sub, SubAssign, Debug)]
         pub struct $name<T> {
             $(pub $fields: T,)+
         }

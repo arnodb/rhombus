@@ -2,7 +2,21 @@ use crate::vector::Vector4ISize;
 use derive_more::Add;
 use std::ops::Mul;
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Add, AddAssign, Sub, SubAssign)]
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+    Debug,
+)]
 pub struct QuadricVector(Vector4ISize);
 
 impl QuadricVector {
