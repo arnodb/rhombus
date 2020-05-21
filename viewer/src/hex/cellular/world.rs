@@ -5,7 +5,9 @@ use amethyst::{
     prelude::*,
 };
 use rand::{thread_rng, RngCore};
-use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
+use rhombus_core::hex::coordinates::{
+    axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection,
+};
 use std::{collections::BTreeMap, sync::Arc};
 
 const HEX_SCALE_HORIZONTAL: f32 = 0.8;

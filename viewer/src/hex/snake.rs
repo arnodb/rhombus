@@ -6,12 +6,12 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::cubic::{CubicVector, RingIter};
+use rhombus_core::hex::coordinates::{cubic::CubicVector, ring::RingIter};
 use std::{collections::VecDeque, sync::Arc};
 
 pub struct HexSnakeDemo {
     position: CubicVector,
-    snakes: Vec<Snake<Entity, RingIter>>,
+    snakes: Vec<Snake<Entity, RingIter<CubicVector>>>,
     remaining_millis: u64,
 }
 
@@ -29,7 +29,7 @@ impl HexSnakeDemo {
         radius: usize,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-    ) -> Snake<Entity, RingIter> {
+    ) -> Snake<Entity, RingIter<CubicVector>> {
         let mut state = VecDeque::new();
         let mut iter = Self::snake_center(position).ring_iter(radius);
         state.push_back(Self::push_hex(

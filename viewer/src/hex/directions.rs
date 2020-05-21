@@ -6,7 +6,7 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::cubic::CubicVector;
+use rhombus_core::hex::coordinates::{cubic::CubicVector, direction::HexagonalDirection};
 use std::sync::Arc;
 
 pub struct HexDirectionsDemo {

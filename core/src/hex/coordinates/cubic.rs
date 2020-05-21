@@ -1,4 +1,12 @@
-use crate::{hex::coordinates::axial::AxialVector, vector::Vector3ISize};
+use crate::{
+    hex::coordinates::{
+        axial::AxialVector,
+        direction::{HexagonalDirection, NUM_DIRECTIONS},
+        ring::{BigRingIter, RingIter},
+        HexagonalVector,
+    },
+    vector::Vector3ISize,
+};
 use derive_more::Add;
 use std::ops::{Mul, MulAssign};
 
@@ -11,10 +19,6 @@ impl CubicVector {
             panic!("Invalid CubicVector values x = {}, y = {}, z = {}", x, y, z);
         }
         Self(Vector3ISize { x, y, z })
-    }
-
-    pub fn direction(direction: usize) -> Self {
-        DIRECTIONS[direction]
     }
 
     pub fn x(&self) -> isize {
@@ -34,15 +38,11 @@ impl CubicVector {
         (isize::abs(vector.x()) + isize::abs(vector.y()) + isize::abs(vector.z())) / 2
     }
 
-    pub fn neighbor(&self, direction: usize) -> Self {
-        *self + Self::direction(direction)
-    }
-
-    pub fn ring_iter(&self, radius: usize) -> RingIter {
+    pub fn ring_iter(&self, radius: usize) -> RingIter<Self> {
         RingIter::new(radius, *self)
     }
 
-    pub fn big_ring_iter(&self, cell_radius: usize, radius: usize) -> BigRingIter {
+    pub fn big_ring_iter(&self, cell_radius: usize, radius: usize) -> BigRingIter<Self> {
         BigRingIter::new(cell_radius, radius, *self)
     }
 }
@@ -69,6 +69,8 @@ impl Mul<CubicVector> for isize {
     }
 }
 
+impl HexagonalVector for CubicVector {}
+
 impl From<AxialVector> for CubicVector {
     fn from(axial: AxialVector) -> Self {
         let x = axial.q();
@@ -84,8 +86,6 @@ impl From<CubicVector> for AxialVector {
     }
 }
 
-const NUM_DIRECTIONS: usize = 6;
-
 // Don't use constructor and lazy_static so that the compiler can actually optimize the use
 // of directions.
 const DIRECTIONS: [CubicVector; NUM_DIRECTIONS] = [
@@ -97,143 +97,9 @@ const DIRECTIONS: [CubicVector; NUM_DIRECTIONS] = [
     CubicVector(Vector3ISize { x: 0, y: -1, z: 1 }),
 ];
 
-pub struct RingIter {
-    edge_length: usize,
-    direction: usize,
-    next: CubicVector,
-    edge_index: usize,
-}
-
-impl RingIter {
-    fn new(radius: usize, center: CubicVector) -> Self {
-        Self {
-            edge_length: radius,
-            direction: 0,
-            next: center + radius as isize * CubicVector::direction(4),
-            edge_index: 1,
-        }
-    }
-
-    pub fn peek(&mut self) -> Option<&CubicVector> {
-        if self.direction < NUM_DIRECTIONS {
-            Some(&self.next)
-        } else {
-            None
-        }
-    }
-}
-
-impl Iterator for RingIter {
-    type Item = CubicVector;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let edge_length = self.edge_length;
-        let direction = self.direction;
-        if direction < NUM_DIRECTIONS {
-            let next = self.next;
-            self.next = next.neighbor(direction);
-            let ei = self.edge_index;
-            if ei < edge_length {
-                self.edge_index = ei + 1;
-            } else {
-                self.edge_index = 1;
-                self.direction = direction + 1;
-                while self.direction < NUM_DIRECTIONS && edge_length == 0 {
-                    self.direction += 1;
-                }
-            }
-            Some(next)
-        } else {
-            None
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let el = self.edge_length;
-        if el > 0 {
-            let length = el * 6;
-            (length, Some(length))
-        } else {
-            (1, Some(1))
-        }
-    }
-}
-
-pub struct BigRingIter {
-    edge_length: usize,
-    direction: usize,
-    direction_vector: CubicVector,
-    next: CubicVector,
-    edge_index: usize,
-    cell_radius: usize,
-}
-
-impl BigRingIter {
-    fn new(cell_radius: usize, radius: usize, center: CubicVector) -> Self {
-        let direction_vector = CubicVector::direction(0) * (cell_radius as isize + 1)
-            + CubicVector::direction(1) * cell_radius as isize;
-        let next = center
-            + radius as isize
-                * (CubicVector::direction(4) * (cell_radius as isize + 1)
-                    + CubicVector::direction(5) * cell_radius as isize);
-        Self {
-            edge_length: radius,
-            direction: 0,
-            direction_vector,
-            next,
-            edge_index: 1,
-            cell_radius,
-        }
-    }
-
-    pub fn peek(&mut self) -> Option<&CubicVector> {
-        if self.direction < 6 {
-            Some(&self.next)
-        } else {
-            None
-        }
-    }
-}
-
-impl Iterator for BigRingIter {
-    type Item = CubicVector;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let edge_length = self.edge_length;
-        let direction = self.direction;
-        if direction < 6 {
-            let next = self.next;
-            self.next = next + self.direction_vector;
-            let ei = self.edge_index;
-            if ei < edge_length {
-                self.edge_index = ei + 1;
-            } else {
-                self.edge_index = 1;
-                self.direction = direction + 1;
-                while self.direction < NUM_DIRECTIONS && edge_length == 0 {
-                    self.direction += 1;
-                }
-                if self.direction < 6 {
-                    self.direction_vector = CubicVector::direction(self.direction)
-                        * (self.cell_radius as isize + 1)
-                        + CubicVector::direction((self.direction + 1) % NUM_DIRECTIONS)
-                            * self.cell_radius as isize;
-                }
-            }
-            Some(next)
-        } else {
-            None
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let el = self.edge_length;
-        if el > 0 {
-            let length = el * 6;
-            (length, Some(length))
-        } else {
-            (1, Some(1))
-        }
+impl HexagonalDirection for CubicVector {
+    fn direction(direction: usize) -> Self {
+        DIRECTIONS[direction]
     }
 }
 
@@ -307,14 +173,14 @@ fn test_cubic_vector_distance() {
 }
 
 #[test]
-fn test_directions_are_valid() {
+fn test_cubic_directions_are_valid() {
     for v in DIRECTIONS.iter() {
         CubicVector::new(v.x(), v.y(), v.z());
     }
 }
 
 #[test]
-fn test_all_directions_are_unique() {
+fn test_cubic_directions_are_unique() {
     for dir1 in 0..NUM_DIRECTIONS - 1 {
         for dir2 in dir1 + 1..NUM_DIRECTIONS {
             assert_ne!(DIRECTIONS[dir1], DIRECTIONS[dir2])
@@ -323,7 +189,7 @@ fn test_all_directions_are_unique() {
 }
 
 #[test]
-fn test_all_directions_have_opposite() {
+fn test_cubic_directions_have_opposite() {
     for dir in 0..NUM_DIRECTIONS / 2 {
         assert_eq!(
             DIRECTIONS[dir] + DIRECTIONS[dir + NUM_DIRECTIONS / 2],
@@ -333,7 +199,21 @@ fn test_all_directions_have_opposite() {
 }
 
 #[test]
-fn test_neighbor() {
+fn test_cubic_directions_match_axial() {
+    for dir in 0..NUM_DIRECTIONS - 1 {
+        assert_eq!(
+            CubicVector::direction(dir),
+            AxialVector::direction(dir).into()
+        );
+        assert_eq!(
+            AxialVector::direction(dir),
+            CubicVector::direction(dir).into()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_neighbor() {
     assert_eq!(
         CubicVector::new(-1, 0, 1).neighbor(0),
         CubicVector::new(0, -1, 1)
@@ -341,7 +221,7 @@ fn test_neighbor() {
 }
 
 #[cfg(test)]
-fn do_test_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
+fn do_test_cubic_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
     let center = CubicVector::default();
     let mut iter = center.ring_iter(radius);
     let mut peeked = iter.peek().cloned();
@@ -366,13 +246,13 @@ fn do_test_ring_iter(radius: usize, expected: &Vec<CubicVector>) {
 }
 
 #[test]
-fn test_ring_iter0() {
-    do_test_ring_iter(0, &vec![CubicVector::default()]);
+fn test_cubic_ring_iter0() {
+    do_test_cubic_ring_iter(0, &vec![CubicVector::default()]);
 }
 
 #[test]
-fn test_ring_iter1() {
-    do_test_ring_iter(
+fn test_cubic_ring_iter1() {
+    do_test_cubic_ring_iter(
         1,
         &vec![
             CubicVector::new(-1, 0, 1),
@@ -386,8 +266,8 @@ fn test_ring_iter1() {
 }
 
 #[test]
-fn test_ring_iter2() {
-    do_test_ring_iter(
+fn test_cubic_ring_iter2() {
+    do_test_cubic_ring_iter(
         2,
         &vec![
             CubicVector::new(-2, 0, 2),

@@ -10,7 +10,9 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
+use rhombus_core::hex::coordinates::{
+    axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
