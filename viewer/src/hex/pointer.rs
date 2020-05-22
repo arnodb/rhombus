@@ -1,5 +1,5 @@
 use crate::{
-    assets::{Color, ColorData, RhombusViewerAssets},
+    assets::{Color, RhombusViewerAssets, TextureAndMaterial},
     world::RhombusViewerWorld,
 };
 use amethyst::{
@@ -277,12 +277,12 @@ impl HexPointer {
     fn get_pointer_texture_and_material(
         vertical_direction: VerticalDirection,
         assets: &RhombusViewerAssets,
-    ) -> ColorData {
+    ) -> TextureAndMaterial {
         let color = match vertical_direction {
             VerticalDirection::Horizontal => Color::Cyan,
             VerticalDirection::Up => Color::Green,
             VerticalDirection::Down => Color::Red,
         };
-        assets.color_data[&color].clone()
+        assets.color_data[&color].light.clone()
     }
 }

@@ -37,7 +37,7 @@ impl DodecDirectionsDemo {
             let mut transform = Transform::default();
             transform.set_scale(Vector3::new(0.3, 0.3, 0.3));
             world.transform_quadric(pos, &mut transform);
-            let color_data = world.assets.color_data[&color].clone();
+            let color_data = world.assets.color_data[&color].light.clone();
             self.entities.push(
                 data.world
                     .create_entity()

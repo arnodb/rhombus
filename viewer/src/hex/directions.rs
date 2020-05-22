@@ -37,7 +37,7 @@ impl HexDirectionsDemo {
             transform.set_scale(Vector3::new(0.3, 0.1, 0.3));
             let pos = (origin, 0.0).into();
             world.transform_cubic(pos, &mut transform);
-            let color_data = world.assets.color_data[&color].clone();
+            let color_data = world.assets.color_data[&color].light.clone();
             self.entities.push(
                 data.world
                     .create_entity()

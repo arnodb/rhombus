@@ -63,7 +63,7 @@ impl HexSnakeDemo {
         transform.set_scale(Vector3::new(0.8, 0.08, 0.8));
         let pos = (hex, 0.0).into();
         world.transform_cubic(pos, &mut transform);
-        let color_data = world.assets.color_data[&color].clone();
+        let color_data = world.assets.color_data[&color].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())

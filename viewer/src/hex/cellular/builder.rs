@@ -1,4 +1,7 @@
-use crate::{hex::cellular::world::World, world::RhombusViewerWorld};
+use crate::{
+    hex::cellular::world::{FovState, World},
+    world::RhombusViewerWorld,
+};
 use amethyst::{
     core::timing::Time,
     ecs::prelude::*,
@@ -12,6 +15,7 @@ use std::sync::Arc;
 enum CellularState {
     Moving,
     Expanded,
+    FieldOfView(bool),
 }
 
 pub struct HexCellularBuilder {
@@ -104,6 +108,20 @@ impl SimpleState for HexCellularBuilder {
                     let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                     world.toggle_follow(&data);
                 }
+                Some((VirtualKeyCode::F, ElementState::Pressed)) => {
+                    if let CellularState::FieldOfView(mut fov_enabled) = self.state {
+                        fov_enabled = !fov_enabled;
+                        self.world.change_field_of_view(
+                            if fov_enabled {
+                                FovState::Full
+                            } else {
+                                FovState::Partial
+                            },
+                            &mut data,
+                        );
+                        self.state = CellularState::FieldOfView(fov_enabled);
+                    }
+                }
                 _ => {}
             }
             trans
@@ -113,7 +131,7 @@ impl SimpleState for HexCellularBuilder {
     }
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
-        if self.state == CellularState::Expanded {
+        if let CellularState::FieldOfView(..) = self.state {
             self.remaining_millis = 0;
             return Trans::None;
         }
@@ -135,11 +153,14 @@ impl SimpleState for HexCellularBuilder {
                     );
                     if frozen {
                         self.world.expand(self.world_radius, self.cell_radius, data);
-                        self.world.create_pointer(data);
                         self.state = CellularState::Expanded;
                     }
                 }
                 CellularState::Expanded => {
+                    self.world.create_pointer(FovState::Full, data);
+                    self.state = CellularState::FieldOfView(true);
+                }
+                CellularState::FieldOfView(..) => {
                     break;
                 }
             }

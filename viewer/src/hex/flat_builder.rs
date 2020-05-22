@@ -49,7 +49,7 @@ impl HexFlatBuilderDemo {
         transform.set_scale(Vector3::new(0.8, 0.1, 0.8));
         let pos = (position, 0.1).into();
         world.transform_cubic(pos, &mut transform);
-        let color_data = world.assets.color_data[&Color::White].clone();
+        let color_data = world.assets.color_data[&Color::White].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())
@@ -68,7 +68,7 @@ impl HexFlatBuilderDemo {
         transform.set_scale(Vector3::new(0.8, 0.3, 0.8));
         let pos = (position, 0.3).into();
         world.transform_cubic(pos, &mut transform);
-        let color_data = world.assets.color_data[&Color::Red].clone();
+        let color_data = world.assets.color_data[&Color::Red].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())

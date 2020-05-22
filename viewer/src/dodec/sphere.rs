@@ -34,7 +34,7 @@ impl SimpleState for DodecSphereDemo {
                 let mut transform = Transform::default();
                 transform.set_scale(Vector3::new(0.8, 0.8, 0.8));
                 world.transform_quadric(pos, &mut transform);
-                let color_data = world.assets.color_data[&Color::Red].clone();
+                let color_data = world.assets.color_data[&Color::Red].light.clone();
                 self.entities.push(
                     data.world
                         .create_entity()

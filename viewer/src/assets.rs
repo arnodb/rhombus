@@ -29,6 +29,12 @@ pub enum Color {
 
 #[derive(Debug, Clone)]
 pub struct ColorData {
+    pub light: TextureAndMaterial,
+    pub dark: TextureAndMaterial,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextureAndMaterial {
     pub texture: Handle<Texture>,
     pub material: Handle<Material>,
 }

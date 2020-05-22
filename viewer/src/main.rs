@@ -11,7 +11,7 @@ pub mod systems;
 pub mod world;
 
 use crate::{
-    assets::{Color, ColorData, RhombusViewerAssets},
+    assets::{Color, ColorData, RhombusViewerAssets, TextureAndMaterial},
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
     hex::{
         bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
@@ -166,37 +166,42 @@ impl SimpleState for RhombusViewer {
             });
             let mat_defaults = data.world.read_resource::<MaterialDefaults>().0.clone();
             let color_data = [
-                (Color::Black, (0.0, 0.0, 0.0, 1.0)),
-                (Color::Red, (1.0, 0.0, 0.0, 1.0)),
-                (Color::Green, (0.0, 1.0, 0.0, 1.0)),
-                (Color::Blue, (0.0, 0.0, 1.0, 1.0)),
-                (Color::Yellow, (1.0, 1.0, 0.0, 1.0)),
-                (Color::Magenta, (1.0, 0.0, 1.0, 1.0)),
-                (Color::Cyan, (0.0, 1.0, 1.0, 1.0)),
-                (Color::White, (1.0, 1.0, 1.0, 1.0)),
+                (Color::Black, (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 1.0)),
+                (Color::Red, (1.0, 0.0, 0.0, 1.0), (0.5, 0.0, 0.0, 1.0)),
+                (Color::Green, (0.0, 1.0, 0.0, 1.0), (0.0, 0.5, 0.0, 1.0)),
+                (Color::Blue, (0.0, 0.0, 1.0, 1.0), (0.0, 0.0, 0.5, 1.0)),
+                (Color::Yellow, (1.0, 1.0, 0.0, 1.0), (0.5, 0.5, 0.0, 1.0)),
+                (Color::Magenta, (1.0, 0.0, 1.0, 1.0), (0.5, 0.0, 0.5, 1.0)),
+                (Color::Cyan, (0.0, 1.0, 1.0, 1.0), (0.0, 0.5, 0.5, 1.0)),
+                (Color::White, (1.0, 1.0, 1.0, 1.0), (0.5, 0.5, 0.5, 1.0)),
             ]
             .iter()
-            .map(|(color, rgba)| {
-                let texture = data
-                    .world
-                    .exec(|loader: AssetLoaderSystemData<'_, Texture>| {
-                        loader.load_from_data(
-                            load_from_srgba(Srgba::new(rgba.0, rgba.1, rgba.2, rgba.3)).into(),
-                            &mut self.progress_counter,
-                        )
-                    });
-                let material = data
-                    .world
-                    .exec(|loader: AssetLoaderSystemData<'_, Material>| {
-                        loader.load_from_data(
-                            Material {
-                                albedo: texture.clone(),
-                                ..mat_defaults.clone()
-                            },
-                            &mut self.progress_counter,
-                        )
-                    });
-                (*color, ColorData { texture, material })
+            .map(|(color, light_rgba, dark_rgba)| {
+                let mut load_color = |rgba: &(f32, f32, f32, f32)| {
+                    let texture = data
+                        .world
+                        .exec(|loader: AssetLoaderSystemData<'_, Texture>| {
+                            loader.load_from_data(
+                                load_from_srgba(Srgba::new(rgba.0, rgba.1, rgba.2, rgba.3)).into(),
+                                &mut self.progress_counter,
+                            )
+                        });
+                    let material =
+                        data.world
+                            .exec(|loader: AssetLoaderSystemData<'_, Material>| {
+                                loader.load_from_data(
+                                    Material {
+                                        albedo: texture.clone(),
+                                        ..mat_defaults.clone()
+                                    },
+                                    &mut self.progress_counter,
+                                )
+                            });
+                    TextureAndMaterial { texture, material }
+                };
+                let light = load_color(light_rgba);
+                let dark = load_color(dark_rgba);
+                (*color, ColorData { light, dark })
             })
             .collect::<HashMap<_, _>>();
 
