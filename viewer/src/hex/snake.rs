@@ -6,30 +6,30 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::{cubic::CubicVector, ring::RingIter};
+use rhombus_core::hex::coordinates::{axial::AxialVector, ring::RingIter};
 use std::{collections::VecDeque, sync::Arc};
 
 pub struct HexSnakeDemo {
-    position: CubicVector,
-    snakes: Vec<Snake<Entity, RingIter<CubicVector>>>,
+    position: AxialVector,
+    snakes: Vec<Snake<Entity, RingIter<AxialVector>>>,
     remaining_millis: u64,
 }
 
 impl HexSnakeDemo {
     pub fn new() -> Self {
         Self {
-            position: CubicVector::default(),
+            position: AxialVector::default(),
             snakes: Vec::new(),
             remaining_millis: 0,
         }
     }
 
     fn new_snake(
-        position: CubicVector,
+        position: AxialVector,
         radius: usize,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-    ) -> Snake<Entity, RingIter<CubicVector>> {
+    ) -> Snake<Entity, RingIter<AxialVector>> {
         let mut state = VecDeque::new();
         let mut iter = Self::snake_center(position).ring_iter(radius);
         state.push_back(Self::push_hex(
@@ -45,7 +45,7 @@ impl HexSnakeDemo {
         }
     }
 
-    fn snake_center(position: CubicVector) -> CubicVector {
+    fn snake_center(position: AxialVector) -> AxialVector {
         position
     }
 
@@ -54,7 +54,7 @@ impl HexSnakeDemo {
     }
 
     fn push_hex(
-        hex: CubicVector,
+        hex: AxialVector,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
         color: Color,
@@ -62,7 +62,7 @@ impl HexSnakeDemo {
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.8, 0.08, 0.8));
         let pos = (hex, 0.0).into();
-        world.transform_cubic(pos, &mut transform);
+        world.transform_axial(pos, &mut transform);
         let color_data = world.assets.color_data[&color].light.clone();
         data.world
             .create_entity()

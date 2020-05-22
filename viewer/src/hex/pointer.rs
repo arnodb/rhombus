@@ -12,7 +12,7 @@ use amethyst::{
     prelude::*,
     renderer::{types::Texture, Material},
 };
-use rhombus_core::hex::coordinates::cubic::CubicVector;
+use rhombus_core::hex::coordinates::axial::AxialVector;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum VerticalDirection {
@@ -30,7 +30,7 @@ impl Default for VerticalDirection {
 #[derive(Default)]
 pub struct HexPointer {
     /* Logical position */
-    position: CubicVector,
+    position: AxialVector,
     height: isize,
     /* Logical directions */
     direction: usize,
@@ -55,7 +55,7 @@ impl HexPointer {
 
     /* Position */
 
-    pub fn position(&self) -> CubicVector {
+    pub fn position(&self) -> AxialVector {
         self.position
     }
 
@@ -65,7 +65,7 @@ impl HexPointer {
 
     pub fn set_position(
         &mut self,
-        position: CubicVector,
+        position: AxialVector,
         height: isize,
         data: &StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
@@ -261,7 +261,7 @@ impl HexPointer {
         world: &RhombusViewerWorld,
     ) {
         let pos = (self.position, 0.7 + self.height as f32 * self.level_height).into();
-        world.transform_cubic(pos, transform);
+        world.transform_axial(pos, transform);
         transform.set_rotation_y_axis(-(self.direction as f32) * std::f32::consts::PI / 3.0);
         match self.vertical_direction {
             VerticalDirection::Horizontal => {}

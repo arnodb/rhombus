@@ -6,18 +6,18 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::{cubic::CubicVector, direction::HexagonalDirection};
+use rhombus_core::hex::coordinates::{axial::AxialVector, direction::HexagonalDirection};
 use std::sync::Arc;
 
 pub struct HexDirectionsDemo {
-    position: CubicVector,
+    position: AxialVector,
     entities: Vec<Entity>,
 }
 
 impl HexDirectionsDemo {
     pub fn new() -> Self {
         Self {
-            position: CubicVector::default(),
+            position: AxialVector::default(),
             entities: Vec::new(),
         }
     }
@@ -36,7 +36,7 @@ impl HexDirectionsDemo {
             let mut transform = Transform::default();
             transform.set_scale(Vector3::new(0.3, 0.1, 0.3));
             let pos = (origin, 0.0).into();
-            world.transform_cubic(pos, &mut transform);
+            world.transform_axial(pos, &mut transform);
             let color_data = world.assets.color_data[&color].light.clone();
             self.entities.push(
                 data.world

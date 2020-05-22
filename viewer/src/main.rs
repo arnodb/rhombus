@@ -50,7 +50,7 @@ use amethyst::{
     winit::VirtualKeyCode,
     Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
-use rhombus_core::hex::coordinates::cubic::CubicVector;
+use rhombus_core::hex::coordinates::axial::AxialVector;
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 use structopt::StructOpt;
 
@@ -214,7 +214,7 @@ impl SimpleState for RhombusViewer {
         };
 
         for r in 0..4 {
-            for pos in CubicVector::default()
+            for pos in AxialVector::default()
                 .ring_iter(r * 24)
                 .step_by(if r != 0 { 24 } else { 1 })
             {
@@ -228,8 +228,8 @@ impl SimpleState for RhombusViewer {
 
                 let mut light_transform = Transform::default();
 
-                let col = pos.x() + (pos.z() - (pos.z() & 1)) / 2;
-                let row = pos.z();
+                let col = pos.q() + (pos.r() - (pos.r() & 1)) / 2;
+                let row = pos.r();
                 light_transform.set_translation_xyz(
                     f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
                     10.0,

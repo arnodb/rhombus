@@ -8,7 +8,7 @@ use amethyst::{
 };
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
-    coordinates::{axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection},
+    coordinates::{axial::AxialVector, direction::HexagonalDirection},
     field_of_view::FieldOfView,
 };
 use std::{
@@ -49,25 +49,15 @@ pub enum FovState {
 
 #[derive(Default)]
 pub struct World {
-    world: BTreeMap<(isize, isize), HexData>,
+    world: BTreeMap<AxialVector, HexData>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
 impl World {
-    fn to_world_key(position: CubicVector) -> (isize, isize) {
-        let axial = AxialVector::from(position);
-        (axial.q(), axial.r())
-    }
-
-    fn to_position(world_key: (isize, isize)) -> CubicVector {
-        let axial = AxialVector::new(world_key.0, world_key.1);
-        axial.into()
-    }
-
     fn create_ground(
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-        position: CubicVector,
+        position: AxialVector,
         scale: f32,
         visible: bool,
     ) -> Entity {
@@ -78,7 +68,7 @@ impl World {
             scale * HEX_SCALE_HORIZONTAL,
         ));
         let pos = (position, GROUND_HEX_SCALE_VERTICAL).into();
-        world.transform_cubic(pos, &mut transform);
+        world.transform_axial(pos, &mut transform);
         let color_data = if visible {
             &world.assets.color_data[&Color::White].light
         } else {
@@ -97,7 +87,7 @@ impl World {
     fn create_wall(
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-        position: CubicVector,
+        position: AxialVector,
         scale: f32,
         visible: bool,
     ) -> Entity {
@@ -108,7 +98,7 @@ impl World {
             scale * HEX_SCALE_HORIZONTAL,
         ));
         let pos = (position, WALL_HEX_SCALE_VERTICAL).into();
-        world.transform_cubic(pos, &mut transform);
+        world.transform_axial(pos, &mut transform);
         let color_data = if visible {
             &world.assets.color_data[&Color::Red].light
         } else {
@@ -135,63 +125,58 @@ impl World {
         self.clear(data, &world);
         let mut rng = thread_rng();
         for r in 0..radius {
-            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
-                self.world
-                    .entry(Self::to_world_key(cell))
-                    .or_insert_with(|| {
-                        let is_wall =
-                            ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
-                        if is_wall {
-                            HexData {
-                                state: HexState::Wall,
-                                entity: Some((
-                                    Self::create_wall(
-                                        data,
-                                        &world,
-                                        cell,
-                                        (2.0 * cell_radius as f32).max(1.0),
-                                        true,
-                                    ),
+            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
+                self.world.entry(cell).or_insert_with(|| {
+                    let is_wall = ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
+                    if is_wall {
+                        HexData {
+                            state: HexState::Wall,
+                            entity: Some((
+                                Self::create_wall(
+                                    data,
+                                    &world,
+                                    cell,
+                                    (2.0 * cell_radius as f32).max(1.0),
                                     true,
-                                )),
-                                automaton_count: 0,
-                            }
-                        } else {
-                            HexData {
-                                state: HexState::Open,
-                                entity: Some((
-                                    Self::create_ground(
-                                        data,
-                                        &world,
-                                        cell,
-                                        (2.0 * cell_radius as f32).max(1.0),
-                                        true,
-                                    ),
-                                    true,
-                                )),
-                                automaton_count: 0,
-                            }
+                                ),
+                                true,
+                            )),
+                            automaton_count: 0,
                         }
-                    });
+                    } else {
+                        HexData {
+                            state: HexState::Open,
+                            entity: Some((
+                                Self::create_ground(
+                                    data,
+                                    &world,
+                                    cell,
+                                    (2.0 * cell_radius as f32).max(1.0),
+                                    true,
+                                ),
+                                true,
+                            )),
+                            automaton_count: 0,
+                        }
+                    }
+                });
             }
         }
-        for cell in CubicVector::default().big_ring_iter(cell_radius, radius) {
-            self.world
-                .entry(Self::to_world_key(cell))
-                .or_insert_with(|| HexData {
-                    state: HexState::HardWall,
-                    entity: Some((
-                        Self::create_wall(
-                            data,
-                            &world,
-                            cell,
-                            (2.0 * cell_radius as f32).max(1.0),
-                            true,
-                        ),
+        for cell in AxialVector::default().big_ring_iter(cell_radius, radius) {
+            self.world.entry(cell).or_insert_with(|| HexData {
+                state: HexState::HardWall,
+                entity: Some((
+                    Self::create_wall(
+                        data,
+                        &world,
+                        cell,
+                        (2.0 * cell_radius as f32).max(1.0),
                         true,
-                    )),
-                    automaton_count: 0,
-                });
+                    ),
+                    true,
+                )),
+                automaton_count: 0,
+            });
         }
     }
 
@@ -233,26 +218,24 @@ impl World {
             hex_data.automaton_count = 0;
         }
         for r in 0..=radius {
-            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
-                let hex_state = self.world.get(&Self::to_world_key(cell)).unwrap().state;
+            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
+                let hex_state = self.world.get(&cell).unwrap().state;
                 let is_wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
                     HexState::Open => false,
                 };
                 if is_wall {
                     for neighbor in cell.big_ring_iter(cell_radius, 1) {
-                        self.world
-                            .get_mut(&Self::to_world_key(neighbor))
-                            .map(|hex_data| {
-                                hex_data.automaton_count += 1;
-                            });
+                        self.world.get_mut(&neighbor).map(|hex_data| {
+                            hex_data.automaton_count += 1;
+                        });
                     }
                 }
             }
         }
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         let mut frozen = true;
-        for (key, hex_data) in &mut self.world {
+        for (pos, hex_data) in &mut self.world {
             match hex_data.state {
                 HexState::Wall => {
                     if !remain_wall_test(hex_data.automaton_count) {
@@ -261,7 +244,7 @@ impl World {
                             Self::create_ground(
                                 data,
                                 &world,
-                                Self::to_position(*key),
+                                *pos,
                                 (2.0 * cell_radius as f32).max(1.0),
                                 true,
                             ),
@@ -278,7 +261,7 @@ impl World {
                             Self::create_wall(
                                 data,
                                 &world,
-                                Self::to_position(*key),
+                                *pos,
                                 (2.0 * cell_radius as f32).max(1.0),
                                 true,
                             ),
@@ -305,12 +288,12 @@ impl World {
         }
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         for r in 0..=radius {
-            for cell in CubicVector::default().big_ring_iter(cell_radius, r) {
+            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
                 let HexData {
                     state: hex_state,
                     entity: hex_entity,
                     ..
-                } = *self.world.get(&Self::to_world_key(cell)).unwrap();
+                } = *self.world.get(&cell).unwrap();
                 let is_wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
                     HexState::Open => false,
@@ -333,31 +316,29 @@ impl World {
                 }
                 for s in 1..=cell_radius {
                     for sub_cell in cell.ring_iter(s) {
-                        self.world
-                            .entry(Self::to_world_key(sub_cell))
-                            .or_insert_with(|| HexData {
-                                state: hex_state,
-                                entity: Some((
-                                    if is_wall {
-                                        Self::create_wall(data, &world, sub_cell, 1.0, true)
-                                    } else {
-                                        Self::create_ground(data, &world, sub_cell, 1.0, true)
-                                    },
-                                    true,
-                                )),
-                                automaton_count: 0,
-                            });
+                        self.world.entry(sub_cell).or_insert_with(|| HexData {
+                            state: hex_state,
+                            entity: Some((
+                                if is_wall {
+                                    Self::create_wall(data, &world, sub_cell, 1.0, true)
+                                } else {
+                                    Self::create_ground(data, &world, sub_cell, 1.0, true)
+                                },
+                                true,
+                            )),
+                            automaton_count: 0,
+                        });
                     }
                 }
             }
         }
     }
 
-    fn find_open_cell(&self) -> Option<CubicVector> {
+    fn find_open_cell(&self) -> Option<AxialVector> {
         let mut r = 0;
         loop {
-            for cell in CubicVector::default().ring_iter(r) {
-                let cell_data = self.world.get(&Self::to_world_key(cell));
+            for cell in AxialVector::default().ring_iter(r) {
+                let cell_data = self.world.get(&cell);
                 match cell_data {
                     Some(HexData {
                         state: HexState::Open,
@@ -408,7 +389,7 @@ impl World {
             if let Some(HexData {
                 state: HexState::Open,
                 ..
-            }) = self.world.get(&Self::to_world_key(next))
+            }) = self.world.get(&next)
             {
                 let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                 pointer.set_position(next, 0, data, &world);
@@ -435,11 +416,11 @@ impl World {
             return;
         };
         let mut visible_keys = BTreeSet::new();
-        visible_keys.insert(Self::to_world_key(pointer.position()));
+        visible_keys.insert(pointer.position());
         let mut fov = FieldOfView::default();
         fov.start(pointer.position());
         let is_obstacle = |pos| {
-            let hex_data = self.world.get(&Self::to_world_key(pos));
+            let hex_data = self.world.get(&pos);
             match hex_data {
                 Some(HexData {
                     state: HexState::Open,
@@ -459,7 +440,7 @@ impl World {
         loop {
             let prev_len = visible_keys.len();
             for pos in fov.iter() {
-                let key = Self::to_world_key(pointer.position() + pos);
+                let key = pointer.position() + pos;
                 if self.world.contains_key(&key) {
                     let inserted = visible_keys.insert(key);
                     debug_assert!(inserted);
@@ -480,9 +461,9 @@ impl World {
             UpdateInvisible,
             Delete,
         }
-        for (key, hex_data) in &mut self.world {
+        for (pos, hex_data) in &mut self.world {
             // The two matches could probably be merged into one
-            let action = if visible_keys.contains(key) {
+            let action = if visible_keys.contains(pos) {
                 match hex_data.entity {
                     None => Action::CreateVisible,
                     Some((_, false)) => Action::UpdateVisible,
@@ -500,30 +481,22 @@ impl World {
             match action {
                 Action::CreateVisible => match hex_data.state {
                     HexState::Open => {
-                        hex_data.entity = Some((
-                            Self::create_ground(data, &world, Self::to_position(*key), 1.0, true),
-                            true,
-                        ));
+                        hex_data.entity =
+                            Some((Self::create_ground(data, &world, *pos, 1.0, true), true));
                     }
                     HexState::Wall | HexState::HardWall => {
-                        hex_data.entity = Some((
-                            Self::create_wall(data, &world, Self::to_position(*key), 1.0, true),
-                            true,
-                        ));
+                        hex_data.entity =
+                            Some((Self::create_wall(data, &world, *pos, 1.0, true), true));
                     }
                 },
                 Action::CreateInvisible => match hex_data.state {
                     HexState::Open => {
-                        hex_data.entity = Some((
-                            Self::create_ground(data, &world, Self::to_position(*key), 1.0, false),
-                            false,
-                        ));
+                        hex_data.entity =
+                            Some((Self::create_ground(data, &world, *pos, 1.0, false), false));
                     }
                     HexState::Wall | HexState::HardWall => {
-                        hex_data.entity = Some((
-                            Self::create_wall(data, &world, Self::to_position(*key), 1.0, false),
-                            false,
-                        ));
+                        hex_data.entity =
+                            Some((Self::create_wall(data, &world, *pos, 1.0, false), false));
                     }
                 },
                 Action::UpdateVisible => {

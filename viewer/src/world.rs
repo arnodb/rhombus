@@ -1,7 +1,7 @@
 use crate::{assets::RhombusViewerAssets, systems::follow_me::FollowMeTag};
 use amethyst::{controls::ArcBallControlTag, core::Transform, ecs::prelude::*, prelude::*};
 use rhombus_core::{
-    dodec::coordinates::quadric::QuadricVector, hex::coordinates::cubic::CubicVector,
+    dodec::coordinates::quadric::QuadricVector, hex::coordinates::axial::AxialVector,
 };
 use std::{
     ops::DerefMut,
@@ -27,9 +27,9 @@ struct FollowSettings {
 }
 
 impl RhombusViewerWorld {
-    pub fn transform_cubic(&self, position: CubicPosition, transform: &mut Transform) {
-        let col = position.pos().x() + (position.pos().z() - (position.pos().z() & 1)) / 2;
-        let row = position.pos().z();
+    pub fn transform_axial(&self, position: AxialPosition, transform: &mut Transform) {
+        let col = position.pos().q() + (position.pos().r() - (position.pos().r() & 1)) / 2;
+        let row = position.pos().r();
         let altitude = position.alt();
         transform.set_translation_xyz(
             f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
@@ -143,11 +143,11 @@ impl RhombusViewerWorld {
     }
 }
 
-#[derive(Debug, Clone, Copy, From)]
-pub struct CubicPosition(CubicVector, f32);
+#[derive(Clone, Copy, From, Debug)]
+pub struct AxialPosition(AxialVector, f32);
 
-impl CubicPosition {
-    fn pos(&self) -> &CubicVector {
+impl AxialPosition {
+    fn pos(&self) -> &AxialVector {
         &self.0
     }
 
@@ -156,5 +156,5 @@ impl CubicPosition {
     }
 }
 
-#[derive(Debug, Clone, Copy, From)]
+#[derive(Clone, Copy, From, Debug)]
 pub struct QuadricPosition(QuadricVector);

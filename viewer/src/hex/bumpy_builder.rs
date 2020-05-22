@@ -10,9 +10,7 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::{
-    axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection,
-};
+use rhombus_core::hex::coordinates::{axial::AxialVector, direction::HexagonalDirection};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -31,7 +29,7 @@ struct VerticalBlock {
 }
 
 pub struct HexBumpyBuilderDemo {
-    world: BTreeMap<(isize, isize), BTreeSet<VerticalBlock>>,
+    world: BTreeMap<AxialVector, BTreeSet<VerticalBlock>>,
     pointer: HexPointer,
 }
 
@@ -43,15 +41,10 @@ impl HexBumpyBuilderDemo {
         }
     }
 
-    fn to_world_key(position: CubicVector) -> (isize, isize) {
-        let axial = AxialVector::from(position);
-        (axial.q(), axial.r())
-    }
-
     fn create_floor(
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-        position: CubicVector,
+        position: AxialVector,
         floor: isize,
     ) -> Entity {
         let mut transform = Transform::default();
@@ -59,7 +52,7 @@ impl HexBumpyBuilderDemo {
         transform.set_scale(Vector3::new(0.8, 0.2, 0.8));
         // Floor is solid from 0.0 to height.
         let pos = (position, floor as f32 * LEVEL_HEIGHT + 0.2).into();
-        world.transform_cubic(pos, &mut transform);
+        world.transform_axial(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::White].light.clone();
         data.world
             .create_entity()
@@ -73,14 +66,14 @@ impl HexBumpyBuilderDemo {
     fn create_ceiling(
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
-        position: CubicVector,
+        position: AxialVector,
         ceiling: isize,
     ) -> Entity {
         let mut transform = Transform::default();
         // Height = 0.1
         transform.set_scale(Vector3::new(0.8, 0.05, 0.8));
         let pos = (position, (ceiling as f32 + 0.7) * LEVEL_HEIGHT).into();
-        world.transform_cubic(pos, &mut transform);
+        world.transform_axial(pos, &mut transform);
         let color_data = world.assets.color_data[&Color::Red].light.clone();
         data.world
             .create_entity()
@@ -98,7 +91,7 @@ impl SimpleState for HexBumpyBuilderDemo {
         self.pointer.create_entities(&mut data, &world);
         let vblock = self
             .world
-            .entry(Self::to_world_key(self.pointer.position()))
+            .entry(self.pointer.position())
             .or_insert_with(BTreeSet::new);
         vblock.insert(VerticalBlock {
             floor: 0,
@@ -159,10 +152,7 @@ impl SimpleState for HexBumpyBuilderDemo {
                         VerticalDirection::Up => self.pointer.height() + 1,
                     };
                     let next_ceiling = next_floor + BLOCK_HEIGHT;
-                    let vblock = self
-                        .world
-                        .entry(Self::to_world_key(next_pos))
-                        .or_insert_with(BTreeSet::new);
+                    let vblock = self.world.entry(next_pos).or_insert_with(BTreeSet::new);
                     // Really need an interval tree for that
                     enum Movement {
                         Void,
