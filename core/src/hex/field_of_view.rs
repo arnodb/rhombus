@@ -14,53 +14,55 @@ pub struct FieldOfView<V: HexagonalVector> {
 }
 
 impl<V: HexagonalVector + HexagonalDirection + Into<VertexVector>> FieldOfView<V> {
-    pub fn start<F>(&mut self, center: V, is_obstacle: &F)
-    where
-        F: Fn(V) -> bool,
-    {
+    pub fn start(&mut self, center: V) {
         self.center = center;
         self.radius = 1;
         self.arcs.clear();
-        for arc in [
-            Arc {
-                start: ArcEnd {
-                    polar_index: 0,
-                    vector: VertexVector(Vector2ISize { x: 3, y: 0 }),
-                },
-                stop: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 }),
-                },
+        self.arcs.push(Arc {
+            start: ArcEnd {
+                polar_index: 0,
+                vector: VertexVector(Vector2ISize { x: 3, y: 0 }),
             },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 }),
-                },
-                stop: ArcEnd {
-                    polar_index: 6,
-                    vector: VertexVector(Vector2ISize { x: 3, y: 0 }),
-                },
+            stop: ArcEnd {
+                polar_index: 3,
+                vector: VertexVector(Vector2ISize { x: -3, y: 0 }),
             },
-        ]
-        .iter()
-        {
-            self.arcs.extend(arc.clone().split(center, 1, is_obstacle));
-        }
+        });
+        self.arcs.push(Arc {
+            start: ArcEnd {
+                polar_index: 3,
+                vector: VertexVector(Vector2ISize { x: -3, y: 0 }),
+            },
+            stop: ArcEnd {
+                polar_index: 6,
+                vector: VertexVector(Vector2ISize { x: 3, y: 0 }),
+            },
+        });
     }
 
     pub fn next_radius<F>(&mut self, is_obstacle: &F)
     where
         F: Fn(V) -> bool,
     {
-        let new_radius = self.radius + 1;
-        let mut split_arcs = Vec::new();
+        let radius = self.radius;
+        let mut expanded_arcs = Vec::new();
         for arc in &mut self.arcs {
-            arc.expand::<V>(self.radius);
-            split_arcs.extend(arc.clone().split(self.center, new_radius, is_obstacle));
+            expanded_arcs.extend(
+                arc.clone()
+                    .split(self.center, radius, is_obstacle)
+                    .into_iter()
+                    .map(|mut arc| {
+                        arc.expand::<V>(radius);
+                        arc
+                    }),
+            );
         }
-        self.arcs = split_arcs;
-        self.radius = new_radius;
+        self.arcs = expanded_arcs;
+        self.radius = radius + 1;
+    }
+
+    pub fn iter<'a>(&'a self) -> ArcsIter<'a, V> {
+        ArcsIter::new(self.radius, self.arcs.iter())
     }
 }
 
@@ -216,6 +218,14 @@ impl ArcEnd {
         self.polar_index = side * new_radius + side_offset + 1;
         loop {
             if self.is_right_of_arc::<V>(new_radius) {
+                // Found one hex crossing the arc.
+                // Check whether the next one is in the same case before breaking the loop.
+                if self.polar_index > 0 {
+                    self.polar_index -= 1;
+                    if !self.is_left_of_arc::<V>(new_radius) {
+                        self.polar_index += 1;
+                    }
+                }
                 break;
             }
             debug_assert!(self.polar_index > 0);
@@ -230,6 +240,14 @@ impl ArcEnd {
         self.polar_index = side * new_radius + side_offset;
         loop {
             if self.is_left_of_arc::<V>(new_radius) {
+                // Found one hex crossing the arc.
+                // Check whether the next one is in the same case before breaking the loop.
+                if self.polar_index < new_radius * 6 {
+                    self.polar_index += 1;
+                    if !self.is_right_of_arc::<V>(new_radius) {
+                        self.polar_index -= 1;
+                    }
+                }
                 break;
             }
             debug_assert!(self.polar_index < new_radius * 6);
@@ -288,8 +306,72 @@ impl From<CubicVector> for VertexVector {
     }
 }
 
+pub struct ArcsIter<'a, V> {
+    radius: usize,
+    arcs: std::slice::Iter<'a, Arc>,
+    current: Option<(&'a Arc, usize, usize)>,
+    _v: std::marker::PhantomData<V>,
+}
+
+impl<'a, V> ArcsIter<'a, V> {
+    fn new(radius: usize, mut arcs: std::slice::Iter<'a, Arc>) -> Self {
+        let current = arcs
+            .next()
+            .map(|arc| (arc, arc.start.polar_index, arc.start.polar_index));
+        Self {
+            radius,
+            arcs,
+            current,
+            _v: Default::default(),
+        }
+    }
+}
+
+impl<'a, V: HexagonalDirection> Iterator for ArcsIter<'a, V> {
+    type Item = V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((arc, polar_index, first_polar_index)) = &mut self.current {
+            let first_polar_index = *first_polar_index;
+            let res = Some(ArcEnd::polar_index_to_vector(*polar_index, self.radius));
+            let next_polar_index = *polar_index + 1;
+            if next_polar_index <= arc.stop.polar_index
+                && next_polar_index % (self.radius * 6) != first_polar_index
+            {
+                *polar_index = next_polar_index;
+            } else {
+                let prev_polar_index = *polar_index;
+                loop {
+                    self.current = self
+                        .arcs
+                        .next()
+                        .map(|arc| (arc, arc.start.polar_index, first_polar_index));
+                    match &mut self.current {
+                        Some((arc, pi, _)) => {
+                            if *pi == prev_polar_index {
+                                *pi += 1;
+                            }
+                            if *pi <= arc.stop.polar_index
+                                && *pi % (self.radius * 6) != first_polar_index
+                            {
+                                break;
+                            }
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+            res
+        } else {
+            None
+        }
+    }
+}
+
 #[test]
-fn test_field_of_view_1_0() {
+fn test_field_of_view_2_0() {
     use std::collections::HashSet;
 
     let center =
@@ -300,9 +382,9 @@ fn test_field_of_view_1_0() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
         vec![
@@ -312,17 +394,17 @@ fn test_field_of_view_1_0() {
                     vector: VertexVector(Vector2ISize { x: 2, y: 2 })
                 },
                 stop: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 5,
+                    polar_index: 11,
                     vector: VertexVector(Vector2ISize { x: 1, y: -1 })
                 }
             },
@@ -331,7 +413,7 @@ fn test_field_of_view_1_0() {
 }
 
 #[test]
-fn test_field_of_view_1_1() {
+fn test_field_of_view_2_1() {
     use std::collections::HashSet;
 
     let center =
@@ -342,61 +424,9 @@ fn test_field_of_view_1_1() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
-    assert_eq!(
-        fov.arcs,
-        vec![
-            Arc {
-                start: ArcEnd {
-                    polar_index: 0,
-                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
-                },
-                stop: ArcEnd {
-                    polar_index: 0,
-                    vector: VertexVector(Vector2ISize { x: 2, y: 2 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 2,
-                    vector: VertexVector(Vector2ISize { x: 0, y: 4 })
-                },
-                stop: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
-                },
-                stop: ArcEnd {
-                    polar_index: 6,
-                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
-                }
-            },
-        ]
-    );
-}
-
-#[test]
-fn test_field_of_view_1_2() {
-    use std::collections::HashSet;
-
-    let center =
-        AxialVector::default() + AxialVector::direction(0) * 1 + AxialVector::direction(1) * 2;
-    let obstacles = {
-        let mut set = HashSet::new();
-        set.insert(center + AxialVector::direction(2));
-        set
-    };
-    let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
         vec![
@@ -407,26 +437,26 @@ fn test_field_of_view_1_2() {
                 },
                 stop: ArcEnd {
                     polar_index: 1,
-                    vector: VertexVector(Vector2ISize { x: 0, y: 2 })
+                    vector: VertexVector(Vector2ISize { x: 2, y: 2 })
                 }
             },
             Arc {
                 start: ArcEnd {
                     polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -2, y: 2 })
-                },
-                stop: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                    vector: VertexVector(Vector2ISize { x: 0, y: 4 })
                 },
                 stop: ArcEnd {
                     polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 12,
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 }
             },
@@ -435,7 +465,59 @@ fn test_field_of_view_1_2() {
 }
 
 #[test]
-fn test_field_of_view_1_3() {
+fn test_field_of_view_2_2() {
+    use std::collections::HashSet;
+
+    let center =
+        AxialVector::default() + AxialVector::direction(0) * 1 + AxialVector::direction(1) * 2;
+    let obstacles = {
+        let mut set = HashSet::new();
+        set.insert(center + AxialVector::direction(2));
+        set
+    };
+    let mut fov = FieldOfView::default();
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
+    assert_eq!(
+        fov.arcs,
+        vec![
+            Arc {
+                start: ArcEnd {
+                    polar_index: 0,
+                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 3,
+                    vector: VertexVector(Vector2ISize { x: 0, y: 2 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 5,
+                    vector: VertexVector(Vector2ISize { x: -2, y: 2 })
+                },
+                stop: ArcEnd {
+                    polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 12,
+                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                }
+            },
+        ]
+    );
+}
+
+#[test]
+fn test_field_of_view_2_3() {
     use std::collections::HashSet;
 
     let center =
@@ -446,9 +528,9 @@ fn test_field_of_view_1_3() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
         vec![
@@ -458,17 +540,17 @@ fn test_field_of_view_1_3() {
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 2,
+                    polar_index: 5,
                     vector: VertexVector(Vector2ISize { x: -1, y: 1 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 4,
+                    polar_index: 7,
                     vector: VertexVector(Vector2ISize { x: -1, y: -1 })
                 },
                 stop: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 12,
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 }
             },
@@ -477,7 +559,7 @@ fn test_field_of_view_1_3() {
 }
 
 #[test]
-fn test_field_of_view_1_4() {
+fn test_field_of_view_2_4() {
     use std::collections::HashSet;
 
     let center =
@@ -488,9 +570,9 @@ fn test_field_of_view_1_4() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
         vec![
@@ -500,27 +582,27 @@ fn test_field_of_view_1_4() {
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 7,
                     vector: VertexVector(Vector2ISize { x: -1, y: -1 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 5,
+                    polar_index: 9,
                     vector: VertexVector(Vector2ISize { x: 0, y: -4 })
                 },
                 stop: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 12,
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 }
             },
@@ -529,7 +611,7 @@ fn test_field_of_view_1_4() {
 }
 
 #[test]
-fn test_field_of_view_1_5() {
+fn test_field_of_view_2_5() {
     use std::collections::HashSet;
 
     let center =
@@ -540,9 +622,9 @@ fn test_field_of_view_1_5() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
         vec![
@@ -552,27 +634,27 @@ fn test_field_of_view_1_5() {
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 3,
+                    polar_index: 6,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 4,
+                    polar_index: 9,
                     vector: VertexVector(Vector2ISize { x: 0, y: -2 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 11,
                     vector: VertexVector(Vector2ISize { x: 2, y: -2 })
                 },
                 stop: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 12,
                     vector: VertexVector(Vector2ISize { x: 3, y: 0 })
                 }
             },
@@ -581,7 +663,7 @@ fn test_field_of_view_1_5() {
 }
 
 #[test]
-fn test_field_of_view_1_024() {
+fn test_field_of_view_2_024() {
     use std::collections::HashSet;
 
     let center =
@@ -594,73 +676,8 @@ fn test_field_of_view_1_024() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 1);
-    assert_eq!(
-        fov.arcs,
-        vec![
-            Arc {
-                start: ArcEnd {
-                    polar_index: 1,
-                    vector: VertexVector(Vector2ISize { x: 2, y: 2 })
-                },
-                stop: ArcEnd {
-                    polar_index: 1,
-                    vector: VertexVector(Vector2ISize { x: 0, y: 2 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -2, y: 2 })
-                },
-                stop: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
-                },
-                stop: ArcEnd {
-                    polar_index: 3,
-                    vector: VertexVector(Vector2ISize { x: -1, y: -1 })
-                }
-            },
-            Arc {
-                start: ArcEnd {
-                    polar_index: 5,
-                    vector: VertexVector(Vector2ISize { x: 0, y: -4 })
-                },
-                stop: ArcEnd {
-                    polar_index: 5,
-                    vector: VertexVector(Vector2ISize { x: 1, y: -1 })
-                }
-            },
-        ]
-    );
-}
-
-#[test]
-fn test_field_of_view_1_024_2_() {
-    use std::collections::HashSet;
-
-    let center =
-        AxialVector::default() + AxialVector::direction(0) * 1 + AxialVector::direction(1) * 2;
-    let obstacles = {
-        let mut set = HashSet::new();
-        set.insert(center + AxialVector::direction(0));
-        set.insert(center + AxialVector::direction(2));
-        set.insert(center + AxialVector::direction(4));
-        set
-    };
-    let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
+    fov.start(center);
     fov.next_radius(&|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
     assert_eq!(fov.radius, 2);
     assert_eq!(
         fov.arcs,
@@ -710,7 +727,72 @@ fn test_field_of_view_1_024_2_() {
 }
 
 #[test]
-fn test_field_of_view_1_024_2_1357911() {
+fn test_field_of_view_2_024_3_() {
+    use std::collections::HashSet;
+
+    let center =
+        AxialVector::default() + AxialVector::direction(0) * 1 + AxialVector::direction(1) * 2;
+    let obstacles = {
+        let mut set = HashSet::new();
+        set.insert(center + AxialVector::direction(0));
+        set.insert(center + AxialVector::direction(2));
+        set.insert(center + AxialVector::direction(4));
+        set
+    };
+    let mut fov = FieldOfView::default();
+    fov.start(center);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 3);
+    assert_eq!(
+        fov.arcs,
+        vec![
+            Arc {
+                start: ArcEnd {
+                    polar_index: 1,
+                    vector: VertexVector(Vector2ISize { x: 2, y: 2 })
+                },
+                stop: ArcEnd {
+                    polar_index: 5,
+                    vector: VertexVector(Vector2ISize { x: 0, y: 2 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 7,
+                    vector: VertexVector(Vector2ISize { x: -2, y: 2 })
+                },
+                stop: ArcEnd {
+                    polar_index: 9,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 9,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 11,
+                    vector: VertexVector(Vector2ISize { x: -1, y: -1 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 13,
+                    vector: VertexVector(Vector2ISize { x: 0, y: -4 })
+                },
+                stop: ArcEnd {
+                    polar_index: 17,
+                    vector: VertexVector(Vector2ISize { x: 1, y: -1 })
+                }
+            },
+        ]
+    );
+}
+
+#[test]
+fn test_field_of_view_2_024_3_1357911() {
     use std::collections::HashSet;
 
     let center =
@@ -729,10 +811,10 @@ fn test_field_of_view_1_024_2_1357911() {
         set
     };
     let mut fov = FieldOfView::default();
-    fov.start(center, &|pos| obstacles.contains(&pos));
+    fov.start(center);
     fov.next_radius(&|pos| obstacles.contains(&pos));
-    assert_eq!(fov.center, center);
-    assert_eq!(fov.radius, 2);
+    fov.next_radius(&|pos| obstacles.contains(&pos));
+    assert_eq!(fov.radius, 3);
     assert_eq!(
         fov.arcs,
         vec![
@@ -742,40 +824,135 @@ fn test_field_of_view_1_024_2_1357911() {
                     vector: VertexVector(Vector2ISize { x: 2, y: 4 })
                 },
                 stop: ArcEnd {
-                    polar_index: 2,
+                    polar_index: 4,
                     vector: VertexVector(Vector2ISize { x: 1, y: 5 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 8,
                     vector: VertexVector(Vector2ISize { x: -3, y: 1 })
                 },
                 stop: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 9,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 9,
                     vector: VertexVector(Vector2ISize { x: -3, y: 0 })
                 },
                 stop: ArcEnd {
-                    polar_index: 6,
+                    polar_index: 10,
                     vector: VertexVector(Vector2ISize { x: -3, y: -1 })
                 }
             },
             Arc {
                 start: ArcEnd {
-                    polar_index: 10,
+                    polar_index: 14,
                     vector: VertexVector(Vector2ISize { x: 1, y: -5 })
                 },
                 stop: ArcEnd {
-                    polar_index: 10,
+                    polar_index: 16,
                     vector: VertexVector(Vector2ISize { x: 2, y: -4 })
                 }
             },
         ]
     );
+}
+
+#[test]
+fn test_field_of_view_line_dir_1_0() {
+    let center =
+        AxialVector::default() + AxialVector::direction(0) * 1 + AxialVector::direction(1) * 2;
+    let is_obstacle = |pos: AxialVector| -> bool {
+        let vector = pos - AxialVector::direction(1) - center;
+        let dir_0 = AxialVector::direction(0);
+        dir_0.q() * vector.r() - dir_0.r() * vector.q() == 0
+    };
+    let mut fov = FieldOfView::default();
+    fov.start(center);
+    fov.next_radius(&is_obstacle);
+    assert_eq!(fov.radius, 2);
+    assert_eq!(
+        fov.arcs,
+        vec![
+            Arc {
+                start: ArcEnd {
+                    polar_index: 0,
+                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 1,
+                    vector: VertexVector(Vector2ISize { x: 2, y: 2 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 5,
+                    vector: VertexVector(Vector2ISize { x: -2, y: 2 })
+                },
+                stop: ArcEnd {
+                    polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                }
+            },
+            Arc {
+                start: ArcEnd {
+                    polar_index: 6,
+                    vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                },
+                stop: ArcEnd {
+                    polar_index: 12,
+                    vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                }
+            },
+        ]
+    );
+    for i in 0..42 {
+        fov.next_radius(&is_obstacle);
+        assert_eq!(fov.radius, i + 3);
+        assert_eq!(
+            fov.arcs,
+            vec![
+                Arc {
+                    start: ArcEnd {
+                        polar_index: 0,
+                        vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                    },
+                    stop: ArcEnd {
+                        polar_index: 1,
+                        vector: VertexVector(Vector2ISize {
+                            x: 2 * i as isize + 3,
+                            y: 1
+                        })
+                    }
+                },
+                Arc {
+                    start: ArcEnd {
+                        polar_index: 3 * i + 8,
+                        vector: VertexVector(Vector2ISize {
+                            x: -(2 * i as isize + 3),
+                            y: 1
+                        })
+                    },
+                    stop: ArcEnd {
+                        polar_index: 3 * i + 9,
+                        vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                    }
+                },
+                Arc {
+                    start: ArcEnd {
+                        polar_index: 3 * i + 9,
+                        vector: VertexVector(Vector2ISize { x: -3, y: 0 })
+                    },
+                    stop: ArcEnd {
+                        polar_index: 6 * i + 18,
+                        vector: VertexVector(Vector2ISize { x: 3, y: 0 })
+                    }
+                },
+            ]
+        );
+    }
 }
