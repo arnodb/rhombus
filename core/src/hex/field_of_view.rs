@@ -4,7 +4,7 @@ use crate::{
     },
     vector::Vector2ISize,
 };
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 #[derive(Default, Debug)]
 pub struct FieldOfView<V: HexagonalVector> {
@@ -61,7 +61,7 @@ impl<V: HexagonalVector + HexagonalDirection + Into<VertexVector>> FieldOfView<V
         self.radius = radius + 1;
     }
 
-    pub fn iter<'a>(&'a self) -> ArcsIter<'a, V> {
+    pub fn iter(&self) -> ArcsIter<'_, V> {
         ArcsIter::new(self.radius, self.arcs.iter())
     }
 }
@@ -179,7 +179,7 @@ impl ArcEnd {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn is_left_of_arc<V: HexagonalDirection + Into<VertexVector>>(&self, radius: usize) -> bool {
@@ -190,7 +190,7 @@ impl ArcEnd {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn contract_start<V: HexagonalVector + Into<VertexVector>>(&mut self, vector: V) {
@@ -269,12 +269,10 @@ pub struct VertexVector(Vector2ISize);
 impl VertexVector {
     fn turns(&self, other: &VertexVector) -> Turn {
         let cross = self.0.x * other.0.y - self.0.y * other.0.x;
-        if cross > 0 {
-            Turn::Left
-        } else if cross < 0 {
-            Turn::Right
-        } else {
-            Turn::Straight
+        match cross.cmp(&0) {
+            Ordering::Greater => Turn::Left,
+            Ordering::Less => Turn::Right,
+            Ordering::Equal => Turn::Straight,
         }
     }
 }

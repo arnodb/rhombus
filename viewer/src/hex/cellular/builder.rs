@@ -96,10 +96,10 @@ impl SimpleState for HexCellularBuilder {
                     }
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
-                    self.world.increment_direction(&mut data);
+                    self.world.increment_direction(&data);
                 }
                 Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
-                    self.world.decrement_direction(&mut data);
+                    self.world.decrement_direction(&data);
                 }
                 Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
                     self.world.next_position(&mut data);

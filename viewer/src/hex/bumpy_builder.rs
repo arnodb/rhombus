@@ -133,16 +133,16 @@ impl SimpleState for HexBumpyBuilderDemo {
                     trans = Trans::Pop;
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
-                    self.pointer.increment_direction(&mut data, &world);
+                    self.pointer.increment_direction(&data, &world);
                 }
                 Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
-                    self.pointer.decrement_direction(&mut data, &world);
+                    self.pointer.decrement_direction(&data, &world);
                 }
                 Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
-                    self.pointer.increment_vertical_direction(&mut data, &world);
+                    self.pointer.increment_vertical_direction(&data, &world);
                 }
                 Some((VirtualKeyCode::Down, ElementState::Pressed)) => {
-                    self.pointer.decrement_vertical_direction(&mut data, &world);
+                    self.pointer.decrement_vertical_direction(&data, &world);
                 }
                 Some((VirtualKeyCode::Space, ElementState::Pressed)) => {
                     let next_pos = self.pointer.position().neighbor(self.pointer.direction());
@@ -191,11 +191,10 @@ impl SimpleState for HexBumpyBuilderDemo {
                                 ),
                             });
                             self.pointer
-                                .set_position(next_pos, next_floor, &mut data, &world);
+                                .set_position(next_pos, next_floor, &data, &world);
                         }
                         Movement::Go { height } => {
-                            self.pointer
-                                .set_position(next_pos, height, &mut data, &world);
+                            self.pointer.set_position(next_pos, height, &data, &world);
                         }
                         Movement::Blocked => {}
                     }

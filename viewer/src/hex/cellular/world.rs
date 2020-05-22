@@ -186,7 +186,7 @@ impl World {
         world: &RhombusViewerWorld,
     ) {
         self.delete_pointer(data, world);
-        for (_, hex) in &mut self.world {
+        for hex in self.world.values_mut() {
             hex.delete_entity(data);
         }
         self.world.clear();
@@ -214,7 +214,7 @@ impl World {
         RaiseF: Fn(u8) -> bool,
         RemainF: Fn(u8) -> bool,
     {
-        for (_, hex_data) in &mut self.world {
+        for hex_data in self.world.values_mut() {
             hex_data.automaton_count = 0;
         }
         for r in 0..=radius {
@@ -226,9 +226,9 @@ impl World {
                 };
                 if is_wall {
                     for neighbor in cell.big_ring_iter(cell_radius, 1) {
-                        self.world.get_mut(&neighbor).map(|hex_data| {
+                        if let Some(hex_data) = self.world.get_mut(&neighbor) {
                             hex_data.automaton_count += 1;
-                        });
+                        }
                     }
                 }
             }
@@ -301,7 +301,7 @@ impl World {
                 if let Some((hex_entity, _)) = hex_entity {
                     {
                         let mut transform_storage = data.world.write_storage::<Transform>();
-                        transform_storage.get_mut(hex_entity).map(|transform| {
+                        if let Some(transform) = transform_storage.get_mut(hex_entity) {
                             transform.set_scale(Vector3::new(
                                 HEX_SCALE_HORIZONTAL,
                                 if is_wall {
@@ -311,7 +311,7 @@ impl World {
                                 },
                                 HEX_SCALE_HORIZONTAL,
                             ))
-                        });
+                        }
                     }
                 }
                 for s in 1..=cell_radius {

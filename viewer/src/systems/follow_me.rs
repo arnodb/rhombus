@@ -32,7 +32,7 @@ impl<'s> System<'s> for FollowMeSystem {
                     Entry::Occupied(..) => {}
                     Entry::Vacant(..) => {
                         if let Some(target_transform) = transforms.get(*target) {
-                            entry.or_insert(target_transform.clone());
+                            entry.or_insert_with(|| target_transform.clone());
                         }
                     }
                 }
@@ -88,7 +88,7 @@ impl<'s> System<'s> for FollowMyRotationSystem {
                     Entry::Occupied(..) => {}
                     Entry::Vacant(..) => {
                         if let Some(target_transform) = transforms.get(*target) {
-                            entry.or_insert(target_transform.clone());
+                            entry.or_insert_with(|| target_transform.clone());
                         }
                     }
                 }

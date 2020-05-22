@@ -100,7 +100,7 @@ impl SimpleState for HexFlatBuilderDemo {
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer.delete_entities(&mut data, &world);
-        for (_, hex) in &self.world {
+        for hex in self.world.values() {
             data.world.delete_entity(hex.entity).expect("delete entity");
         }
         self.world.clear();
@@ -172,7 +172,7 @@ impl SimpleState for HexFlatBuilderDemo {
                                     _ => {}
                                 }
                             }
-                            self.pointer.set_position(next, 0, &mut data, &world);
+                            self.pointer.set_position(next, 0, &data, &world);
                         }
                         HexState::Wall => {}
                     }

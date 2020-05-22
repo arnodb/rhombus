@@ -112,10 +112,10 @@ impl RhombusViewerWorld {
         mode: &mut (bool, FollowSettings),
     ) {
         let mut follow_me_storage = data.world.write_storage::<FollowMeTag>();
-        follow_me_storage.get_mut(self.follower).map(|tag| {
+        if let Some(tag) = follow_me_storage.get_mut(self.follower) {
             tag.target = Some((mode.1.target, 0.1));
             tag.rotation_target = mode.1.rotation_target.map(|t| (t, 0.1));
-        });
+        }
         if mode.1.rotation_target.is_some() {
             let mut transform_storage = data.world.write_storage::<Transform>();
             let rotation = transform_storage
@@ -123,16 +123,14 @@ impl RhombusViewerWorld {
                 .map(Transform::rotation)
                 .cloned();
             if let Some(rotation) = rotation {
-                transform_storage
-                    .get_mut(self.follower_camera)
-                    .map(|transform| {
-                        *transform.rotation_mut() = rotation;
-                    });
+                if let Some(transform) = transform_storage.get_mut(self.follower_camera) {
+                    *transform.rotation_mut() = rotation;
+                }
             }
         }
-        follow_me_storage.get_mut(self.follower_camera).map(|tag| {
+        if let Some(tag) = follow_me_storage.get_mut(self.follower_camera) {
             tag.rotation_target = mode.1.rotation_target.map(|_| (self.origin_camera, 0.01));
-        });
+        }
     }
 
     pub fn set_camera_distance(&self, data: &StateData<'_, GameData<'_, '_>>, distance: f32) {
