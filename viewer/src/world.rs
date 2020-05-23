@@ -27,15 +27,20 @@ struct FollowSettings {
 }
 
 impl RhombusViewerWorld {
-    pub fn transform_axial(&self, position: AxialPosition, transform: &mut Transform) {
+    pub fn axial_translation(&self, position: AxialPosition) -> [f32; 3] {
         let col = position.pos().q() + (position.pos().r() - (position.pos().r() & 1)) / 2;
         let row = position.pos().r();
         let altitude = position.alt();
-        transform.set_translation_xyz(
+        [
             f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
             altitude,
             -row as f32 * 1.5,
-        );
+        ]
+    }
+
+    pub fn transform_axial(&self, position: AxialPosition, transform: &mut Transform) {
+        let translation = self.axial_translation(position);
+        transform.set_translation_xyz(translation[0], translation[1], translation[2]);
     }
 
     pub fn transform_quadric(&self, position: QuadricPosition, transform: &mut Transform) {

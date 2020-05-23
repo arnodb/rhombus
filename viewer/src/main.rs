@@ -41,7 +41,7 @@ use amethyst::{
         formats::mesh::ObjFormat,
         light::{Light, PointLight},
         palette::{Srgb, Srgba},
-        plugins::RenderToWindow,
+        plugins::{RenderDebugLines, RenderToWindow},
         rendy::texture::palette::load_from_srgba,
         types::{DefaultBackend, Mesh, Texture},
         Material, MaterialDefaults, RenderShaded3D, RenderingBundle,
@@ -83,10 +83,11 @@ struct RhombusViewer {
     progress_counter: ProgressCounter,
     origin: Option<Entity>,
     follower: Option<Entity>,
+    draw_axes: bool,
 }
 
 impl RhombusViewer {
-    fn new(demo_num: Option<usize>) -> Self {
+    fn new(demo_num: Option<usize>, draw_axes: bool) -> Self {
         let first_demo_num = demo_num.unwrap_or(0);
         Self {
             animation: if demo_num.is_some() {
@@ -102,6 +103,7 @@ impl RhombusViewer {
             progress_counter: ProgressCounter::default(),
             origin: None,
             follower: None,
+            draw_axes,
         }
     }
 
@@ -132,7 +134,7 @@ impl SimpleState for RhombusViewer {
             .world
             .read_resource::<Time>()
             .absolute_real_time_seconds();
-        {
+        if self.draw_axes {
             let mut debug_lines_component = DebugLinesComponent::with_capacity(100);
             debug_lines_component.add_direction(
                 [-1.0, 0.0, 0.0].into(),
@@ -481,20 +483,16 @@ fn main() -> amethyst::Result<()> {
             &["input_system"],
         )
         .with_bundle({
-            let mut rendering = RenderingBundle::<DefaultBackend>::new()
+            RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(
                     RenderToWindow::from_config_path(display_config_path)?
                         .with_clear([0.05, 0.05, 0.05, 1.0]),
                 )
-                .with_plugin(RenderShaded3D::default());
-            if draw_axes {
-                use amethyst::renderer::plugins::RenderDebugLines;
-                rendering = rendering.with_plugin(RenderDebugLines::default());
-            }
-            rendering
+                .with_plugin(RenderShaded3D::default())
+                .with_plugin(RenderDebugLines::default())
         })?;
 
-    let app = RhombusViewer::new(options.demo.map(|demo| demo as usize));
+    let app = RhombusViewer::new(options.demo.map(|demo| demo as usize), draw_axes);
 
     let mut game = Application::new(assets_dir, app, game_data)?;
 

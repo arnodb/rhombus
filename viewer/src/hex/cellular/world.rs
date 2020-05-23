@@ -4,12 +4,13 @@ use amethyst::{
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
     prelude::*,
-    renderer::{types::Texture, Material},
+    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba, types::Texture, Material},
 };
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
     coordinates::{axial::AxialVector, direction::HexagonalDirection},
     field_of_view::FieldOfView,
+    largest_area::LargestAreaIterator,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -50,6 +51,8 @@ pub enum FovState {
 #[derive(Default)]
 pub struct World {
     world: BTreeMap<AxialVector, HexData>,
+    open_areas: Option<Entity>,
+    wall_areas: Option<Entity>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
@@ -186,10 +189,20 @@ impl World {
         world: &RhombusViewerWorld,
     ) {
         self.delete_pointer(data, world);
+        self.delete_areas(data);
         for hex in self.world.values_mut() {
             hex.delete_entity(data);
         }
         self.world.clear();
+    }
+
+    fn delete_areas(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if let Some(entity) = self.open_areas.take() {
+            data.world.delete_entity(entity).expect("delete entity");
+        }
+        if let Some(entity) = self.wall_areas.take() {
+            data.world.delete_entity(entity).expect("delete entity");
+        }
     }
 
     fn delete_pointer(
@@ -415,8 +428,8 @@ impl World {
         } else {
             return;
         };
-        let mut visible_keys = BTreeSet::new();
-        visible_keys.insert(pointer.position());
+        let mut visible_positions = BTreeSet::new();
+        visible_positions.insert(pointer.position());
         let mut fov = FieldOfView::default();
         fov.start(pointer.position());
         let is_obstacle = |pos| {
@@ -438,20 +451,22 @@ impl World {
             }
         };
         loop {
-            let prev_len = visible_keys.len();
+            let prev_len = visible_positions.len();
             for pos in fov.iter() {
                 let key = pointer.position() + pos;
                 if self.world.contains_key(&key) {
-                    let inserted = visible_keys.insert(key);
+                    let inserted = visible_positions.insert(key);
                     debug_assert!(inserted);
                 }
             }
-            if visible_keys.len() == prev_len {
+            if visible_positions.len() == prev_len {
                 break;
             }
             fov.next_radius(&is_obstacle);
         }
+
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         enum Action {
             None,
@@ -463,7 +478,7 @@ impl World {
         }
         for (pos, hex_data) in &mut self.world {
             // The two matches could probably be merged into one
-            let action = if visible_keys.contains(pos) {
+            let action = if visible_positions.contains(pos) {
                 match hex_data.entity {
                     None => Action::CreateVisible,
                     Some((_, false)) => Action::UpdateVisible,
@@ -537,5 +552,97 @@ impl World {
                 Action::None => {}
             }
         }
+
+        match fov_state {
+            FovState::Partial => self.update_areas(data, &world, &|_| true),
+            FovState::Full => {
+                self.update_areas(data, &world, &|pos| visible_positions.contains(&pos))
+            }
+        }
+    }
+
+    fn update_areas<F>(
+        &mut self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+        filter: &F,
+    ) where
+        F: Fn(AxialVector) -> bool,
+    {
+        self.delete_areas(data);
+        self.open_areas = Some(self.create_debug_area(data, world, false, &filter));
+        self.wall_areas = Some(self.create_debug_area(data, world, true, &filter));
+    }
+
+    fn create_debug_area<F>(
+        &self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+        wall: bool,
+        filter: &F,
+    ) -> Entity
+    where
+        F: Fn(AxialVector) -> bool,
+    {
+        let mut debug_lines_component = DebugLinesComponent::with_capacity(100);
+        let color = if wall {
+            Srgba::new(1.0, 0.0, 0.0, 1.0)
+        } else {
+            Srgba::new(1.0, 1.0, 1.0, 1.0)
+        };
+        let mut largest_area_iterator = LargestAreaIterator::default();
+        if wall {
+            largest_area_iterator.initialize(self.world.iter().filter_map(|(pos, cell_data)| {
+                if filter(*pos) && cell_data.state != HexState::Open {
+                    Some(*pos)
+                } else {
+                    None
+                }
+            }));
+        } else {
+            largest_area_iterator.initialize(self.world.iter().filter_map(|(pos, cell_data)| {
+                if filter(*pos) && cell_data.state == HexState::Open {
+                    Some(*pos)
+                } else {
+                    None
+                }
+            }));
+        }
+        loop {
+            let area = largest_area_iterator.next_largest_area();
+            if area.1.is_none() {
+                break;
+            }
+            if let Some((range_q, range_r)) = area.1 {
+                let mut p1 = world.axial_translation(
+                    (AxialVector::new(*range_q.start(), *range_r.start()), 2.0).into(),
+                );
+                p1[0] -= 3.0_f32.sqrt() / 2.0;
+                p1[2] += 0.5;
+                let mut p2 = world.axial_translation(
+                    (AxialVector::new(*range_q.start(), *range_r.end()), 2.0).into(),
+                );
+                p2[0] -= 1.0 / (3.0_f32.sqrt() * 2.0);
+                p2[2] -= 0.5;
+                let mut p3 = world.axial_translation(
+                    (AxialVector::new(*range_q.end(), *range_r.end()), 2.0).into(),
+                );
+                p3[0] += 3.0_f32.sqrt() / 2.0;
+                p3[2] -= 0.5;
+                let mut p4 = world.axial_translation(
+                    (AxialVector::new(*range_q.end(), *range_r.start()), 2.0).into(),
+                );
+                p4[0] += 1.0 / (3.0_f32.sqrt() * 2.0);
+                p4[2] += 0.5;
+                debug_lines_component.add_line(p1.into(), p2.into(), color);
+                debug_lines_component.add_line(p2.into(), p3.into(), color);
+                debug_lines_component.add_line(p3.into(), p4.into(), color);
+                debug_lines_component.add_line(p4.into(), p1.into(), color);
+            }
+        }
+        data.world
+            .create_entity()
+            .with(debug_lines_component)
+            .build()
     }
 }
