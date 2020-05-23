@@ -1,4 +1,8 @@
-use amethyst::{core::Transform, derive::SystemDesc, ecs::prelude::*};
+use amethyst::{
+    core::{timing::Time, Transform},
+    derive::SystemDesc,
+    ecs::prelude::*,
+};
 use std::collections::{hash_map::Entry, HashMap};
 
 pub struct FollowMeTag {
@@ -14,11 +18,21 @@ impl Component for FollowMeTag {
 pub struct FollowMeSystem;
 
 const STAY_HERE_THRESHOLD: f32 = 0.01;
+const TIME_RATIO: f32 = 0.05;
 
 impl<'s> System<'s> for FollowMeSystem {
-    type SystemData = (WriteStorage<'s, Transform>, ReadStorage<'s, FollowMeTag>);
+    type SystemData = (
+        WriteStorage<'s, Transform>,
+        ReadStorage<'s, FollowMeTag>,
+        Read<'s, Time>,
+    );
 
-    fn run(&mut self, (mut transforms, follow_me_tags): Self::SystemData) {
+    fn run(&mut self, (mut transforms, follow_me_tags, time): Self::SystemData) {
+        let delta_millis = {
+            let duration = time.delta_time();
+            duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
+        };
+
         let mut target_transforms = HashMap::new();
         for follow_me_tag in (&follow_me_tags).join() {
             for target in follow_me_tag
@@ -38,6 +52,7 @@ impl<'s> System<'s> for FollowMeSystem {
                 }
             }
         }
+
         for (transform, follow_me_tag) in (&mut transforms, &follow_me_tags).join() {
             if let Some((target, lerp_ratio)) = &follow_me_tag.target {
                 if let Some(target_transform) = target_transforms.get(target) {
@@ -46,15 +61,19 @@ impl<'s> System<'s> for FollowMeSystem {
                         || delta[1].abs() >= STAY_HERE_THRESHOLD
                         || delta[2].abs() >= STAY_HERE_THRESHOLD
                     {
-                        transform.prepend_translation(delta * *lerp_ratio);
+                        transform.prepend_translation(
+                            delta * (*lerp_ratio * delta_millis as f32 * TIME_RATIO).min(1.0),
+                        );
                     }
                 }
             }
             if let Some((rotation_target, lerp_ratio)) = &follow_me_tag.rotation_target {
                 if let Some(target_transform) = target_transforms.get(rotation_target) {
                     let target_rot = target_transform.rotation();
-                    *transform.rotation_mut() =
-                        transform.rotation().slerp(&target_rot, *lerp_ratio);
+                    *transform.rotation_mut() = transform.rotation().slerp(
+                        &target_rot,
+                        (*lerp_ratio * delta_millis as f32 * TIME_RATIO).min(1.0),
+                    );
                 }
             }
         }
@@ -77,9 +96,15 @@ impl<'s> System<'s> for FollowMyRotationSystem {
     type SystemData = (
         WriteStorage<'s, Transform>,
         ReadStorage<'s, FollowMyRotationTag>,
+        Read<'s, Time>,
     );
 
-    fn run(&mut self, (mut transforms, follow_my_rotation_tags): Self::SystemData) {
+    fn run(&mut self, (mut transforms, follow_my_rotation_tags, time): Self::SystemData) {
+        let delta_millis = {
+            let duration = time.delta_time();
+            duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
+        };
+
         let mut target_transforms = HashMap::new();
         for follow_my_rotation_tag in (&follow_my_rotation_tags).join() {
             for target in &follow_my_rotation_tag.targets {
@@ -94,6 +119,7 @@ impl<'s> System<'s> for FollowMyRotationSystem {
                 }
             }
         }
+
         for (transform, follow_my_rotation_tag) in
             (&mut transforms, &follow_my_rotation_tags).join()
         {
@@ -102,9 +128,10 @@ impl<'s> System<'s> for FollowMyRotationSystem {
                 target_transforms.get(&follow_my_rotation_tag.targets[1]),
             ) {
                 let target_rot = target2_transform.rotation() * target1_transform.rotation();
-                *transform.rotation_mut() = transform
-                    .rotation()
-                    .slerp(&target_rot, follow_my_rotation_tag.lerp_ratio);
+                *transform.rotation_mut() = transform.rotation().slerp(
+                    &target_rot,
+                    (follow_my_rotation_tag.lerp_ratio * delta_millis as f32 * TIME_RATIO).min(1.0),
+                );
             }
         }
     }
