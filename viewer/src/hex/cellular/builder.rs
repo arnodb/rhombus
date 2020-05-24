@@ -111,14 +111,11 @@ impl SimpleState for HexCellularBuilder {
                 Some((VirtualKeyCode::F, ElementState::Pressed)) => {
                     if let CellularState::FieldOfView(mut fov_enabled) = self.state {
                         fov_enabled = !fov_enabled;
-                        self.world.change_field_of_view(
-                            if fov_enabled {
-                                FovState::Full
-                            } else {
-                                FovState::Partial
-                            },
-                            &mut data,
-                        );
+                        self.world.change_field_of_view(if fov_enabled {
+                            FovState::Full
+                        } else {
+                            FovState::Partial
+                        });
                         self.state = CellularState::FieldOfView(fov_enabled);
                     }
                 }
@@ -132,6 +129,7 @@ impl SimpleState for HexCellularBuilder {
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
         if let CellularState::FieldOfView(..) = self.state {
+            self.world.update_renderer(data);
             self.remaining_millis = 0;
             return Trans::None;
         }
@@ -161,6 +159,7 @@ impl SimpleState for HexCellularBuilder {
                     self.state = CellularState::FieldOfView(true);
                 }
                 CellularState::FieldOfView(..) => {
+                    self.world.update_renderer(data);
                     break;
                 }
             }

@@ -46,6 +46,7 @@ pub enum FovState {
 pub struct World {
     world: BTreeMap<AxialVector, HexData>,
     tile_renderer: TileRenderer,
+    tile_renderer_dirty: bool,
     open_areas: Option<Entity>,
     wall_areas: Option<Entity>,
     pointer: Option<(HexPointer, FovState)>,
@@ -67,6 +68,7 @@ impl World {
         Self {
             world,
             tile_renderer,
+            tile_renderer_dirty: false,
             open_areas: None,
             wall_areas: None,
             pointer: None,
@@ -293,7 +295,7 @@ impl World {
             pointer.set_position(cell, 0, data, &world);
             pointer.create_entities(data, &world);
             self.pointer = Some((pointer, fov_state));
-            self.update_renderer(data);
+            self.tile_renderer_dirty = true;
         }
     }
 
@@ -321,23 +323,23 @@ impl World {
             {
                 let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                 pointer.set_position(next, 0, data, &world);
-                self.update_renderer(data);
+                self.tile_renderer_dirty = true;
             }
         }
     }
 
-    pub fn change_field_of_view(
-        &mut self,
-        fov_state: FovState,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-    ) {
+    pub fn change_field_of_view(&mut self, fov_state: FovState) {
         if let Some((_, pointer_fov_state)) = &mut self.pointer {
             *pointer_fov_state = fov_state;
-            self.update_renderer(data);
+            self.tile_renderer_dirty = true;
         }
     }
 
-    fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if !self.tile_renderer_dirty {
+            return;
+        }
+
         let (pointer, fov_state) = if let Some((pointer, fov_state)) = &self.pointer {
             (pointer, *fov_state)
         } else {
@@ -412,6 +414,8 @@ impl World {
                 self.update_areas(data, &world, &|pos| visible_positions.contains(&pos))
             }
         }
+
+        self.tile_renderer_dirty = false;
     }
 
     fn update_areas<F>(
