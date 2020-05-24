@@ -1,5 +1,5 @@
 use crate::{
-    assets::{Color, RhombusViewerAssets, TextureAndMaterial},
+    assets::{Color, RhombusViewerAssets},
     world::RhombusViewerWorld,
 };
 use amethyst::{
@@ -10,7 +10,7 @@ use amethyst::{
     },
     ecs::prelude::*,
     prelude::*,
-    renderer::{types::Texture, Material},
+    renderer::Material,
 };
 use rhombus_core::hex::coordinates::axial::AxialVector;
 
@@ -162,7 +162,7 @@ impl HexPointer {
     ) {
         let update_rot_trans =
             self.direction != direction || self.vertical_direction != vertical_direction;
-        let update_texture = self.vertical_direction != vertical_direction;
+        let update_material = self.vertical_direction != vertical_direction;
 
         self.direction = direction;
         self.vertical_direction = vertical_direction;
@@ -175,19 +175,10 @@ impl HexPointer {
                 }
             }
 
-            if update_texture {
-                let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
+            if update_material {
                 let mut material_storage = data.world.write_storage::<Handle<Material>>();
-                if let (Some(texture), Some(material)) = (
-                    texture_storage.get_mut(entities.pointer),
-                    material_storage.get_mut(entities.pointer),
-                ) {
-                    let color_data = Self::get_pointer_texture_and_material(
-                        self.vertical_direction,
-                        &world.assets,
-                    );
-                    *texture = color_data.texture;
-                    *material = color_data.material;
+                if let Some(material) = material_storage.get_mut(entities.pointer) {
+                    *material = Self::get_pointer_material(self.vertical_direction, &world.assets);
                 }
             }
         }
@@ -233,8 +224,7 @@ impl HexPointer {
         let mut transform = Transform::default();
         transform.set_scale(Vector3::new(0.3, 0.1, 0.3));
         transform.set_translation_x(0.7);
-        let color_data =
-            Self::get_pointer_texture_and_material(self.vertical_direction, &world.assets);
+        let material = Self::get_pointer_material(self.vertical_direction, &world.assets);
         let pointer = data
             .world
             .create_entity()
@@ -242,8 +232,7 @@ impl HexPointer {
                 entity: pointer_rot_trans,
             })
             .with(world.assets.pointer_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
+            .with(material)
             .with(transform)
             .build();
 
@@ -274,10 +263,10 @@ impl HexPointer {
         }
     }
 
-    fn get_pointer_texture_and_material(
+    fn get_pointer_material(
         vertical_direction: VerticalDirection,
         assets: &RhombusViewerAssets,
-    ) -> TextureAndMaterial {
+    ) -> Handle<Material> {
         let color = match vertical_direction {
             VerticalDirection::Horizontal => Color::Cyan,
             VerticalDirection::Up => Color::Green,

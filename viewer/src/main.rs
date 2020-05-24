@@ -11,7 +11,7 @@ pub mod systems;
 pub mod world;
 
 use crate::{
-    assets::{Color, ColorData, RhombusViewerAssets, TextureAndMaterial},
+    assets::{Color, ColorData, RhombusViewerAssets},
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
     hex::{
         bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
@@ -199,7 +199,7 @@ impl SimpleState for RhombusViewer {
                                     &mut self.progress_counter,
                                 )
                             });
-                    TextureAndMaterial { texture, material }
+                    material
                 };
                 let light = load_color(light_rgba);
                 let dark = load_color(dark_rgba);
@@ -274,8 +274,7 @@ impl SimpleState for RhombusViewer {
             .create_entity()
             .with(follower_transform)
             //.with(assets.pointer_handle.clone())
-            //.with(assets.color_data[&Color::Magenta].texture.clone())
-            //.with(assets.color_data[&Color::Magenta].material.clone())
+            //.with(assets.color_data[&Color::Magenta].light.clone())
             .with(FollowMeTag {
                 target: Some((origin, 0.1)),
                 rotation_target: None,

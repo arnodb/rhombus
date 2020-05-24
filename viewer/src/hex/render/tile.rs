@@ -1,13 +1,10 @@
-use crate::{
-    assets::{Color, TextureAndMaterial},
-    world::RhombusViewerWorld,
-};
+use crate::{assets::Color, world::RhombusViewerWorld};
 use amethyst::{
     assets::Handle,
     core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
     prelude::*,
-    renderer::{types::Texture, Material},
+    renderer::Material,
 };
 use itertools::{EitherOrBoth, Itertools};
 use rhombus_core::hex::coordinates::axial::AxialVector;
@@ -66,7 +63,7 @@ impl TileRenderer {
                     entity: Self::create_hex(
                         position,
                         self.get_scale(wall),
-                        self.get_texture_and_material(wall, visible, world),
+                        self.get_material(wall, visible, world),
                         data,
                         world,
                     ),
@@ -76,7 +73,6 @@ impl TileRenderer {
             }
             Entry::Occupied(mut entry) => {
                 let mut transform_storage = data.world.write_storage::<Transform>();
-                let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
                 let mut material_storage = data.world.write_storage::<Handle<Material>>();
                 self.update_cell_internal(
                     entry.get_mut(),
@@ -84,7 +80,6 @@ impl TileRenderer {
                     visible,
                     world,
                     &mut transform_storage,
-                    &mut texture_storage,
                     &mut material_storage,
                 );
             }
@@ -101,7 +96,6 @@ impl TileRenderer {
     ) {
         self.world.borrow_mut().entry(position).and_modify(|cell| {
             let mut transform_storage = data.world.write_storage::<Transform>();
-            let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
             let mut material_storage = data.world.write_storage::<Handle<Material>>();
             self.update_cell_internal(
                 cell,
@@ -109,7 +103,6 @@ impl TileRenderer {
                 visible,
                 world,
                 &mut transform_storage,
-                &mut texture_storage,
                 &mut material_storage,
             )
         });
@@ -162,7 +155,6 @@ impl TileRenderer {
         let mut tile_world = self.world.borrow_mut();
         {
             let mut transform_storage = data.world.write_storage::<Transform>();
-            let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
             let mut material_storage = data.world.write_storage::<Handle<Material>>();
             for joint in tile_world
                 .iter_mut()
@@ -175,7 +167,6 @@ impl TileRenderer {
                         is_visible_cell(*right.0, right.1),
                         world,
                         &mut transform_storage,
-                        &mut texture_storage,
                         &mut material_storage,
                     ),
                     EitherOrBoth::Left(left) => to_remove.push(*left.0),
@@ -199,7 +190,7 @@ impl TileRenderer {
                     entity: Self::create_hex(
                         position,
                         self.get_scale(wall),
-                        self.get_texture_and_material(wall, visible, world),
+                        self.get_material(wall, visible, world),
                         data,
                         world,
                     ),
@@ -227,12 +218,12 @@ impl TileRenderer {
         }
     }
 
-    fn get_texture_and_material(
+    fn get_material(
         &self,
         wall: bool,
         visible: bool,
         world: &RhombusViewerWorld,
-    ) -> TextureAndMaterial {
+    ) -> Handle<Material> {
         let color = if wall { Color::Red } else { Color::White };
         if visible {
             world.assets.color_data[&color].light.clone()
@@ -244,7 +235,7 @@ impl TileRenderer {
     fn create_hex(
         position: AxialVector,
         scale: CellScale,
-        tex_mat: TextureAndMaterial,
+        material: Handle<Material>,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) -> Entity {
@@ -259,8 +250,7 @@ impl TileRenderer {
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())
-            .with(tex_mat.texture)
-            .with(tex_mat.material)
+            .with(material)
             .with(transform)
             .build()
     }
@@ -272,7 +262,6 @@ impl TileRenderer {
         visible: bool,
         world: &RhombusViewerWorld,
         transform_storage: &mut WriteStorage<Transform>,
-        texture_storage: &mut WriteStorage<Handle<Texture>>,
         material_storage: &mut WriteStorage<Handle<Material>>,
     ) {
         if cell.wall != wall {
@@ -281,8 +270,7 @@ impl TileRenderer {
         if cell.wall != wall || cell.visible != visible {
             Self::update_cell_color(
                 cell,
-                self.get_texture_and_material(wall, visible, world),
-                texture_storage,
+                self.get_material(wall, visible, world),
                 material_storage,
             );
         }
@@ -308,15 +296,11 @@ impl TileRenderer {
 
     fn update_cell_color(
         cell: &mut Cell,
-        tex_mat: TextureAndMaterial,
-        texture_storage: &mut WriteStorage<Handle<Texture>>,
+        material: Handle<Material>,
         material_storage: &mut WriteStorage<Handle<Material>>,
     ) {
-        *texture_storage
-            .get_mut(cell.entity)
-            .expect("A cell always has a Texture") = tex_mat.texture;
         *material_storage
             .get_mut(cell.entity)
-            .expect("A cell always has a Material") = tex_mat.material;
+            .expect("A cell always has a Material") = material;
     }
 }

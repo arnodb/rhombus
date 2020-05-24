@@ -1,9 +1,6 @@
 use amethyst::{
     assets::Handle,
-    renderer::{
-        types::{Mesh, Texture},
-        Material,
-    },
+    renderer::{types::Mesh, Material},
 };
 use std::collections::HashMap;
 
@@ -29,12 +26,6 @@ pub enum Color {
 
 #[derive(Debug, Clone)]
 pub struct ColorData {
-    pub light: TextureAndMaterial,
-    pub dark: TextureAndMaterial,
-}
-
-#[derive(Debug, Clone)]
-pub struct TextureAndMaterial {
-    pub texture: Handle<Texture>,
-    pub material: Handle<Material>,
+    pub light: Handle<Material>,
+    pub dark: Handle<Material>,
 }

@@ -63,12 +63,11 @@ impl HexSnakeDemo {
         transform.set_scale(Vector3::new(0.8, 0.08, 0.8));
         let pos = (hex, 0.0).into();
         world.transform_axial(pos, &mut transform);
-        let color_data = world.assets.color_data[&color].light.clone();
+        let material = world.assets.color_data[&color].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
+            .with(material)
             .with(transform)
             .build()
     }

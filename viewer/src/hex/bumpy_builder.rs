@@ -53,12 +53,11 @@ impl HexBumpyBuilderDemo {
         // Floor is solid from 0.0 to height.
         let pos = (position, floor as f32 * LEVEL_HEIGHT + 0.2).into();
         world.transform_axial(pos, &mut transform);
-        let color_data = world.assets.color_data[&Color::White].light.clone();
+        let material = world.assets.color_data[&Color::White].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
+            .with(material)
             .with(transform)
             .build()
     }
@@ -74,12 +73,11 @@ impl HexBumpyBuilderDemo {
         transform.set_scale(Vector3::new(0.8, 0.05, 0.8));
         let pos = (position, (ceiling as f32 + 0.7) * LEVEL_HEIGHT).into();
         world.transform_axial(pos, &mut transform);
-        let color_data = world.assets.color_data[&Color::Red].light.clone();
+        let material = world.assets.color_data[&Color::Red].light.clone();
         data.world
             .create_entity()
             .with(world.assets.hex_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
+            .with(material)
             .with(transform)
             .build()
     }
