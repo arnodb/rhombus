@@ -8,6 +8,7 @@ edition = "2018"
 derive_more = "0.99"
 derive-new = "0.5"
 amethyst = { version = "0.15", features = ["vulkan"] }
+itertools = "0.9"
 rand = "0.7"
 rhombus_core = { path = "../core"}
 structopt = "0.3"

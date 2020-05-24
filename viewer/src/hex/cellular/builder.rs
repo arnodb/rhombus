@@ -29,7 +29,7 @@ pub struct HexCellularBuilder {
 impl HexCellularBuilder {
     pub fn new() -> Self {
         Self {
-            world: World::default(),
+            world: World::new(),
             world_radius: 12,
             cell_radius: 2,
             remaining_millis: 0,

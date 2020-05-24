@@ -1,10 +1,14 @@
-use crate::{assets::Color, hex::pointer::HexPointer, world::RhombusViewerWorld};
+use crate::{
+    hex::{
+        pointer::HexPointer,
+        render::tile::{CellScale, TileRenderer},
+    },
+    world::RhombusViewerWorld,
+};
 use amethyst::{
-    assets::Handle,
-    core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
     prelude::*,
-    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba, types::Texture, Material},
+    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
 };
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
@@ -30,16 +34,7 @@ pub enum HexState {
 
 pub struct HexData {
     state: HexState,
-    entity: Option<(Entity, bool)>,
     automaton_count: u8,
-}
-
-impl HexData {
-    fn delete_entity(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        if let Some((entity, _)) = self.entity.take() {
-            data.world.delete_entity(entity).expect("delete entity");
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -48,73 +43,34 @@ pub enum FovState {
     Full,
 }
 
-#[derive(Default)]
 pub struct World {
     world: BTreeMap<AxialVector, HexData>,
+    tile_renderer: TileRenderer,
     open_areas: Option<Entity>,
     wall_areas: Option<Entity>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
 impl World {
-    fn create_ground(
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-        position: AxialVector,
-        scale: f32,
-        visible: bool,
-    ) -> Entity {
-        let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(
-            scale * HEX_SCALE_HORIZONTAL,
-            GROUND_HEX_SCALE_VERTICAL,
-            scale * HEX_SCALE_HORIZONTAL,
-        ));
-        let pos = (position, GROUND_HEX_SCALE_VERTICAL).into();
-        world.transform_axial(pos, &mut transform);
-        let color_data = if visible {
-            &world.assets.color_data[&Color::White].light
-        } else {
-            &world.assets.color_data[&Color::White].dark
+    pub fn new() -> Self {
+        let world = BTreeMap::new();
+        let tile_renderer = TileRenderer::new(
+            CellScale {
+                horizontal: HEX_SCALE_HORIZONTAL,
+                vertical: GROUND_HEX_SCALE_VERTICAL,
+            },
+            CellScale {
+                horizontal: HEX_SCALE_HORIZONTAL,
+                vertical: WALL_HEX_SCALE_VERTICAL,
+            },
+        );
+        Self {
+            world,
+            tile_renderer,
+            open_areas: None,
+            wall_areas: None,
+            pointer: None,
         }
-        .clone();
-        data.world
-            .create_entity()
-            .with(world.assets.hex_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
-            .with(transform)
-            .build()
-    }
-
-    fn create_wall(
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-        position: AxialVector,
-        scale: f32,
-        visible: bool,
-    ) -> Entity {
-        let mut transform = Transform::default();
-        transform.set_scale(Vector3::new(
-            scale * HEX_SCALE_HORIZONTAL,
-            WALL_HEX_SCALE_VERTICAL,
-            scale * HEX_SCALE_HORIZONTAL,
-        ));
-        let pos = (position, WALL_HEX_SCALE_VERTICAL).into();
-        world.transform_axial(pos, &mut transform);
-        let color_data = if visible {
-            &world.assets.color_data[&Color::Red].light
-        } else {
-            &world.assets.color_data[&Color::Red].dark
-        }
-        .clone();
-        data.world
-            .create_entity()
-            .with(world.assets.hex_handle.clone())
-            .with(color_data.texture)
-            .with(color_data.material)
-            .with(transform)
-            .build()
     }
 
     pub fn reset_world(
@@ -126,60 +82,49 @@ impl World {
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
+        self.tile_renderer.set_scales(
+            CellScale {
+                horizontal: (2.0 * cell_radius as f32).max(1.0) * HEX_SCALE_HORIZONTAL,
+                vertical: GROUND_HEX_SCALE_VERTICAL,
+            },
+            CellScale {
+                horizontal: (2.0 * cell_radius as f32).max(1.0) * HEX_SCALE_HORIZONTAL,
+                vertical: WALL_HEX_SCALE_VERTICAL,
+            },
+            data,
+        );
         let mut rng = thread_rng();
         for r in 0..radius {
             for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
-                self.world.entry(cell).or_insert_with(|| {
-                    let is_wall = ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
-                    if is_wall {
+                let wall = ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
+                self.world.insert(
+                    cell,
+                    if wall {
                         HexData {
                             state: HexState::Wall,
-                            entity: Some((
-                                Self::create_wall(
-                                    data,
-                                    &world,
-                                    cell,
-                                    (2.0 * cell_radius as f32).max(1.0),
-                                    true,
-                                ),
-                                true,
-                            )),
                             automaton_count: 0,
                         }
                     } else {
                         HexData {
                             state: HexState::Open,
-                            entity: Some((
-                                Self::create_ground(
-                                    data,
-                                    &world,
-                                    cell,
-                                    (2.0 * cell_radius as f32).max(1.0),
-                                    true,
-                                ),
-                                true,
-                            )),
                             automaton_count: 0,
                         }
-                    }
-                });
+                    },
+                );
+                self.tile_renderer
+                    .insert_cell(cell, wall, true, data, &world);
             }
         }
         for cell in AxialVector::default().big_ring_iter(cell_radius, radius) {
-            self.world.entry(cell).or_insert_with(|| HexData {
-                state: HexState::HardWall,
-                entity: Some((
-                    Self::create_wall(
-                        data,
-                        &world,
-                        cell,
-                        (2.0 * cell_radius as f32).max(1.0),
-                        true,
-                    ),
-                    true,
-                )),
-                automaton_count: 0,
-            });
+            self.world.insert(
+                cell,
+                HexData {
+                    state: HexState::HardWall,
+                    automaton_count: 0,
+                },
+            );
+            self.tile_renderer
+                .insert_cell(cell, true, true, data, &world);
         }
     }
 
@@ -190,9 +135,7 @@ impl World {
     ) {
         self.delete_pointer(data, world);
         self.delete_areas(data);
-        for hex in self.world.values_mut() {
-            hex.delete_entity(data);
-        }
+        self.tile_renderer.clear(data);
         self.world.clear();
     }
 
@@ -252,34 +195,16 @@ impl World {
             match hex_data.state {
                 HexState::Wall => {
                     if !remain_wall_test(hex_data.automaton_count) {
-                        hex_data.delete_entity(data);
-                        hex_data.entity = Some((
-                            Self::create_ground(
-                                data,
-                                &world,
-                                *pos,
-                                (2.0 * cell_radius as f32).max(1.0),
-                                true,
-                            ),
-                            true,
-                        ));
+                        self.tile_renderer
+                            .update_cell(*pos, false, true, data, &world);
                         hex_data.state = HexState::Open;
                         frozen = false;
                     }
                 }
                 HexState::Open => {
                     if raise_wall_test(hex_data.automaton_count) {
-                        hex_data.delete_entity(data);
-                        hex_data.entity = Some((
-                            Self::create_wall(
-                                data,
-                                &world,
-                                *pos,
-                                (2.0 * cell_radius as f32).max(1.0),
-                                true,
-                            ),
-                            true,
-                        ));
+                        self.tile_renderer
+                            .update_cell(*pos, true, true, data, &world);
                         hex_data.state = HexState::Wall;
                         frozen = false;
                     }
@@ -300,47 +225,37 @@ impl World {
             return;
         }
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.tile_renderer.set_scales(
+            CellScale {
+                horizontal: HEX_SCALE_HORIZONTAL,
+                vertical: GROUND_HEX_SCALE_VERTICAL,
+            },
+            CellScale {
+                horizontal: HEX_SCALE_HORIZONTAL,
+                vertical: WALL_HEX_SCALE_VERTICAL,
+            },
+            data,
+        );
         for r in 0..=radius {
             for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
                 let HexData {
-                    state: hex_state,
-                    entity: hex_entity,
-                    ..
+                    state: hex_state, ..
                 } = *self.world.get(&cell).unwrap();
-                let is_wall = match hex_state {
+                let wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
                     HexState::Open => false,
                 };
-                if let Some((hex_entity, _)) = hex_entity {
-                    {
-                        let mut transform_storage = data.world.write_storage::<Transform>();
-                        if let Some(transform) = transform_storage.get_mut(hex_entity) {
-                            transform.set_scale(Vector3::new(
-                                HEX_SCALE_HORIZONTAL,
-                                if is_wall {
-                                    WALL_HEX_SCALE_VERTICAL
-                                } else {
-                                    GROUND_HEX_SCALE_VERTICAL
-                                },
-                                HEX_SCALE_HORIZONTAL,
-                            ))
-                        }
-                    }
-                }
                 for s in 1..=cell_radius {
-                    for sub_cell in cell.ring_iter(s) {
-                        self.world.entry(sub_cell).or_insert_with(|| HexData {
-                            state: hex_state,
-                            entity: Some((
-                                if is_wall {
-                                    Self::create_wall(data, &world, sub_cell, 1.0, true)
-                                } else {
-                                    Self::create_ground(data, &world, sub_cell, 1.0, true)
-                                },
-                                true,
-                            )),
-                            automaton_count: 0,
-                        });
+                    for sub_pos in cell.ring_iter(s) {
+                        self.world.insert(
+                            sub_pos,
+                            HexData {
+                                state: hex_state,
+                                automaton_count: 0,
+                            },
+                        );
+                        self.tile_renderer
+                            .insert_cell(sub_pos, wall, true, data, &world);
                     }
                 }
             }
@@ -378,7 +293,7 @@ impl World {
             pointer.set_position(cell, 0, data, &world);
             pointer.create_entities(data, &world);
             self.pointer = Some((pointer, fov_state));
-            self.update_entities(data);
+            self.update_renderer(data);
         }
     }
 
@@ -406,7 +321,7 @@ impl World {
             {
                 let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                 pointer.set_position(next, 0, data, &world);
-                self.update_entities(data);
+                self.update_renderer(data);
             }
         }
     }
@@ -418,16 +333,17 @@ impl World {
     ) {
         if let Some((_, pointer_fov_state)) = &mut self.pointer {
             *pointer_fov_state = fov_state;
-            self.update_entities(data);
+            self.update_renderer(data);
         }
     }
 
-    fn update_entities(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         let (pointer, fov_state) = if let Some((pointer, fov_state)) = &self.pointer {
             (pointer, *fov_state)
         } else {
             return;
         };
+
         let mut visible_positions = BTreeSet::new();
         visible_positions.insert(pointer.position());
         let mut fov = FieldOfView::default();
@@ -467,89 +383,26 @@ impl World {
 
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
 
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-        enum Action {
-            None,
-            CreateVisible,
-            CreateInvisible,
-            UpdateVisible,
-            UpdateInvisible,
-            Delete,
-        }
-        for (pos, hex_data) in &mut self.world {
-            // The two matches could probably be merged into one
-            let action = if visible_positions.contains(pos) {
-                match hex_data.entity {
-                    None => Action::CreateVisible,
-                    Some((_, false)) => Action::UpdateVisible,
-                    Some((_, true)) => Action::None,
-                }
-            } else {
-                match (hex_data.entity, fov_state) {
-                    (None, FovState::Partial) => Action::CreateInvisible,
-                    (None, FovState::Full) => Action::None,
-                    (Some((_, false)), FovState::Partial) => Action::None,
-                    (Some((_, true)), FovState::Partial) => Action::UpdateInvisible,
-                    (Some((_, _)), FovState::Full) => Action::Delete,
-                }
-            };
-            match action {
-                Action::CreateVisible => match hex_data.state {
-                    HexState::Open => {
-                        hex_data.entity =
-                            Some((Self::create_ground(data, &world, *pos, 1.0, true), true));
-                    }
-                    HexState::Wall | HexState::HardWall => {
-                        hex_data.entity =
-                            Some((Self::create_wall(data, &world, *pos, 1.0, true), true));
-                    }
-                },
-                Action::CreateInvisible => match hex_data.state {
-                    HexState::Open => {
-                        hex_data.entity =
-                            Some((Self::create_ground(data, &world, *pos, 1.0, false), false));
-                    }
-                    HexState::Wall | HexState::HardWall => {
-                        hex_data.entity =
-                            Some((Self::create_wall(data, &world, *pos, 1.0, false), false));
-                    }
-                },
-                Action::UpdateVisible => {
-                    let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
-                    let mut material_storage = data.world.write_storage::<Handle<Material>>();
-                    let color_data = match hex_data.state {
-                        HexState::Open => world.assets.color_data[&Color::White].light.clone(),
-                        HexState::Wall | HexState::HardWall => {
-                            world.assets.color_data[&Color::Red].light.clone()
-                        }
-                    };
-                    texture_storage
-                        .insert(hex_data.entity.unwrap().0, color_data.texture)
-                        .expect("insert texture");
-                    material_storage
-                        .insert(hex_data.entity.unwrap().0, color_data.material)
-                        .expect("insert material");
-                    hex_data.entity.as_mut().unwrap().1 = true;
-                }
-                Action::UpdateInvisible => {
-                    let mut texture_storage = data.world.write_storage::<Handle<Texture>>();
-                    let mut material_storage = data.world.write_storage::<Handle<Material>>();
-                    let color_data = match hex_data.state {
-                        HexState::Open => world.assets.color_data[&Color::White].dark.clone(),
-                        HexState::Wall | HexState::HardWall => {
-                            world.assets.color_data[&Color::Red].dark.clone()
-                        }
-                    };
-                    texture_storage
-                        .insert(hex_data.entity.unwrap().0, color_data.texture)
-                        .expect("insert texture");
-                    material_storage
-                        .insert(hex_data.entity.unwrap().0, color_data.material)
-                        .expect("insert material");
-                    hex_data.entity.as_mut().unwrap().1 = false;
-                }
-                Action::Delete => hex_data.delete_entity(data),
-                Action::None => {}
+        match fov_state {
+            FovState::Partial => {
+                self.tile_renderer.update_world(
+                    self.world.iter(),
+                    |_, hex_data| hex_data.state != HexState::Open,
+                    |pos, _| visible_positions.contains(&pos),
+                    data,
+                    &world,
+                );
+            }
+            FovState::Full => {
+                self.tile_renderer.update_world(
+                    self.world
+                        .iter()
+                        .filter(|(pos, _)| visible_positions.contains(pos)),
+                    |_, hex_data| hex_data.state != HexState::Open,
+                    |_, _| true,
+                    data,
+                    &world,
+                );
             }
         }
 
