@@ -1,7 +1,11 @@
 use crate::{
     hex::{
         pointer::HexPointer,
-        render::tile::{CellScale, TileRenderer},
+        render::{
+            edge::EdgeRenderer,
+            renderer::HexRenderer,
+            tile::{CellScale, TileRenderer},
+        },
     },
     world::RhombusViewerWorld,
 };
@@ -25,6 +29,24 @@ const HEX_SCALE_HORIZONTAL: f32 = 0.8;
 const GROUND_HEX_SCALE_VERTICAL: f32 = 0.1;
 const WALL_HEX_SCALE_VERTICAL: f32 = 1.0;
 
+pub fn new_tile_renderer() -> TileRenderer {
+    TileRenderer::new(
+        CellScale {
+            horizontal: HEX_SCALE_HORIZONTAL,
+            vertical: GROUND_HEX_SCALE_VERTICAL,
+        },
+        CellScale {
+            horizontal: HEX_SCALE_HORIZONTAL,
+            vertical: WALL_HEX_SCALE_VERTICAL,
+        },
+        0,
+    )
+}
+
+pub fn new_edge_renderer() -> EdgeRenderer {
+    EdgeRenderer::new()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HexState {
     Open,
@@ -43,32 +65,22 @@ pub enum FovState {
     Full,
 }
 
-pub struct World {
+pub struct World<R: HexRenderer> {
     world: BTreeMap<AxialVector, HexData>,
-    tile_renderer: TileRenderer,
-    tile_renderer_dirty: bool,
+    renderer: R,
+    renderer_dirty: bool,
     open_areas: Option<Entity>,
     wall_areas: Option<Entity>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
-impl World {
-    pub fn new() -> Self {
+impl<R: HexRenderer> World<R> {
+    pub fn new(renderer: R) -> Self {
         let world = BTreeMap::new();
-        let tile_renderer = TileRenderer::new(
-            CellScale {
-                horizontal: HEX_SCALE_HORIZONTAL,
-                vertical: GROUND_HEX_SCALE_VERTICAL,
-            },
-            CellScale {
-                horizontal: HEX_SCALE_HORIZONTAL,
-                vertical: WALL_HEX_SCALE_VERTICAL,
-            },
-        );
         Self {
             world,
-            tile_renderer,
-            tile_renderer_dirty: false,
+            renderer,
+            renderer_dirty: false,
             open_areas: None,
             wall_areas: None,
             pointer: None,
@@ -84,17 +96,7 @@ impl World {
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
-        self.tile_renderer.set_scales(
-            CellScale {
-                horizontal: (2.0 * cell_radius as f32).max(1.0) * HEX_SCALE_HORIZONTAL,
-                vertical: GROUND_HEX_SCALE_VERTICAL,
-            },
-            CellScale {
-                horizontal: (2.0 * cell_radius as f32).max(1.0) * HEX_SCALE_HORIZONTAL,
-                vertical: WALL_HEX_SCALE_VERTICAL,
-            },
-            data,
-        );
+        self.renderer.set_cell_radius(cell_radius, data);
         let mut rng = thread_rng();
         for r in 0..radius {
             for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
@@ -113,8 +115,7 @@ impl World {
                         }
                     },
                 );
-                self.tile_renderer
-                    .insert_cell(cell, wall, true, data, &world);
+                self.renderer.insert_cell(cell, wall, true, data, &world);
             }
         }
         for cell in AxialVector::default().big_ring_iter(cell_radius, radius) {
@@ -125,8 +126,7 @@ impl World {
                     automaton_count: 0,
                 },
             );
-            self.tile_renderer
-                .insert_cell(cell, true, true, data, &world);
+            self.renderer.insert_cell(cell, true, true, data, &world);
         }
     }
 
@@ -137,7 +137,7 @@ impl World {
     ) {
         self.delete_pointer(data, world);
         self.delete_areas(data);
-        self.tile_renderer.clear(data);
+        self.renderer.clear(data);
         self.world.clear();
     }
 
@@ -197,16 +197,14 @@ impl World {
             match hex_data.state {
                 HexState::Wall => {
                     if !remain_wall_test(hex_data.automaton_count) {
-                        self.tile_renderer
-                            .update_cell(*pos, false, true, data, &world);
+                        self.renderer.update_cell(*pos, false, true, data, &world);
                         hex_data.state = HexState::Open;
                         frozen = false;
                     }
                 }
                 HexState::Open => {
                     if raise_wall_test(hex_data.automaton_count) {
-                        self.tile_renderer
-                            .update_cell(*pos, true, true, data, &world);
+                        self.renderer.update_cell(*pos, true, true, data, &world);
                         hex_data.state = HexState::Wall;
                         frozen = false;
                     }
@@ -227,17 +225,7 @@ impl World {
             return;
         }
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        self.tile_renderer.set_scales(
-            CellScale {
-                horizontal: HEX_SCALE_HORIZONTAL,
-                vertical: GROUND_HEX_SCALE_VERTICAL,
-            },
-            CellScale {
-                horizontal: HEX_SCALE_HORIZONTAL,
-                vertical: WALL_HEX_SCALE_VERTICAL,
-            },
-            data,
-        );
+        self.renderer.set_cell_radius(0, data);
         for r in 0..=radius {
             for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
                 let HexData {
@@ -256,8 +244,7 @@ impl World {
                                 automaton_count: 0,
                             },
                         );
-                        self.tile_renderer
-                            .insert_cell(sub_pos, wall, true, data, &world);
+                        self.renderer.insert_cell(sub_pos, wall, true, data, &world);
                     }
                 }
             }
@@ -295,7 +282,7 @@ impl World {
             pointer.set_position(cell, 0, data, &world);
             pointer.create_entities(data, &world);
             self.pointer = Some((pointer, fov_state));
-            self.tile_renderer_dirty = true;
+            self.renderer_dirty = true;
         }
     }
 
@@ -323,7 +310,7 @@ impl World {
             {
                 let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                 pointer.set_position(next, 0, data, &world);
-                self.tile_renderer_dirty = true;
+                self.renderer_dirty = true;
             }
         }
     }
@@ -331,12 +318,12 @@ impl World {
     pub fn change_field_of_view(&mut self, fov_state: FovState) {
         if let Some((_, pointer_fov_state)) = &mut self.pointer {
             *pointer_fov_state = fov_state;
-            self.tile_renderer_dirty = true;
+            self.renderer_dirty = true;
         }
     }
 
-    pub fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        if !self.tile_renderer_dirty {
+    pub fn update_renderer_world(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if !self.renderer_dirty {
             return;
         }
 
@@ -387,7 +374,7 @@ impl World {
 
         match fov_state {
             FovState::Partial => {
-                self.tile_renderer.update_world(
+                self.renderer.update_world(
                     self.world.iter(),
                     |_, hex_data| hex_data.state != HexState::Open,
                     |pos, _| visible_positions.contains(&pos),
@@ -396,7 +383,7 @@ impl World {
                 );
             }
             FovState::Full => {
-                self.tile_renderer.update_world(
+                self.renderer.update_world(
                     self.world
                         .iter()
                         .filter(|(pos, _)| visible_positions.contains(pos)),
@@ -415,7 +402,12 @@ impl World {
             }
         }
 
-        self.tile_renderer_dirty = false;
+        self.renderer_dirty = false;
+    }
+
+    pub fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.renderer.update(data, &world);
     }
 
     fn update_areas<F>(
@@ -472,22 +464,22 @@ impl World {
             }
             if let Some((range_q, range_r)) = area.1 {
                 let mut p1 = world.axial_translation(
-                    (AxialVector::new(*range_q.start(), *range_r.start()), 2.0).into(),
+                    (AxialVector::new(*range_q.start(), *range_r.start()), 1.0).into(),
                 );
                 p1[0] -= 3.0_f32.sqrt() / 2.0;
                 p1[2] += 0.5;
                 let mut p2 = world.axial_translation(
-                    (AxialVector::new(*range_q.start(), *range_r.end()), 2.0).into(),
+                    (AxialVector::new(*range_q.start(), *range_r.end()), 1.0).into(),
                 );
                 p2[0] -= 1.0 / (3.0_f32.sqrt() * 2.0);
                 p2[2] -= 0.5;
                 let mut p3 = world.axial_translation(
-                    (AxialVector::new(*range_q.end(), *range_r.end()), 2.0).into(),
+                    (AxialVector::new(*range_q.end(), *range_r.end()), 1.0).into(),
                 );
                 p3[0] += 3.0_f32.sqrt() / 2.0;
                 p3[2] -= 0.5;
                 let mut p4 = world.axial_translation(
-                    (AxialVector::new(*range_q.end(), *range_r.start()), 2.0).into(),
+                    (AxialVector::new(*range_q.end(), *range_r.start()), 1.0).into(),
                 );
                 p4[0] += 1.0 / (3.0_f32.sqrt() * 2.0);
                 p4[2] += 0.5;

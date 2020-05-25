@@ -1,7 +1,10 @@
 use crate::{
     hex::{
         pointer::HexPointer,
-        render::tile::{CellScale, TileRenderer},
+        render::{
+            renderer::HexRenderer,
+            tile::{CellScale, TileRenderer},
+        },
     },
     world::RhombusViewerWorld,
 };
@@ -26,14 +29,14 @@ struct HexData {
 
 pub struct HexFlatBuilderDemo {
     world: BTreeMap<AxialVector, HexData>,
-    tile_renderer: TileRenderer,
+    renderer: TileRenderer,
     pointer: HexPointer,
 }
 
 impl HexFlatBuilderDemo {
     pub fn new() -> Self {
         let world = BTreeMap::new();
-        let tile_renderer = TileRenderer::new(
+        let renderer = TileRenderer::new(
             CellScale {
                 horizontal: 0.8,
                 vertical: 0.1,
@@ -42,11 +45,12 @@ impl HexFlatBuilderDemo {
                 horizontal: 0.8,
                 vertical: 0.3,
             },
+            0,
         );
         let pointer = HexPointer::new_with_level_height(1.0);
         Self {
             world,
-            tile_renderer,
+            renderer,
             pointer,
         }
     }
@@ -63,8 +67,7 @@ impl HexFlatBuilderDemo {
                 state: HexState::Wall,
             },
         );
-        self.tile_renderer
-            .insert_cell(position, true, true, data, world);
+        self.renderer.insert_cell(position, true, true, data, world);
     }
 }
 
@@ -78,14 +81,14 @@ impl SimpleState for HexFlatBuilderDemo {
                 state: HexState::Open,
             },
         );
-        self.tile_renderer
+        self.renderer
             .insert_cell(self.pointer.position(), false, true, &mut data, &world);
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer.delete_entities(&mut data, &world);
-        self.tile_renderer.clear(&mut data);
+        self.renderer.clear(&mut data);
         self.world.clear();
     }
 
@@ -117,7 +120,7 @@ impl SimpleState for HexFlatBuilderDemo {
                         }
                     });
                     if new {
-                        self.tile_renderer
+                        self.renderer
                             .insert_cell(next, false, true, &mut data, &world);
                     }
                     match next_state.state {

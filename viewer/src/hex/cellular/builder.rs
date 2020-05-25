@@ -18,8 +18,17 @@ enum CellularState {
     FieldOfView(bool),
 }
 
+use super::world::new_edge_renderer as new_renderer;
+use crate::hex::render::edge::EdgeRenderer;
+type Renderer = EdgeRenderer;
+/*
+use super::world::new_tile_renderer as new_renderer;
+use crate::hex::render::tile::TileRenderer;
+type Renderer = TileRenderer;
+*/
+
 pub struct HexCellularBuilder {
-    world: World,
+    world: World<Renderer>,
     world_radius: usize,
     cell_radius: usize,
     remaining_millis: u64,
@@ -29,7 +38,7 @@ pub struct HexCellularBuilder {
 impl HexCellularBuilder {
     pub fn new() -> Self {
         Self {
-            world: World::new(),
+            world: World::new(new_renderer()),
             world_radius: 12,
             cell_radius: 2,
             remaining_millis: 0,
@@ -129,6 +138,7 @@ impl SimpleState for HexCellularBuilder {
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
         if let CellularState::FieldOfView(..) = self.state {
+            self.world.update_renderer_world(data);
             self.world.update_renderer(data);
             self.remaining_millis = 0;
             return Trans::None;
@@ -139,6 +149,8 @@ impl SimpleState for HexCellularBuilder {
         } + self.remaining_millis;
         let num = delta_millis / 500;
         self.remaining_millis = delta_millis % 500;
+        let mut update_renderer_world = false;
+        let mut update_renderer = false;
         for _ in 0..num {
             match self.state {
                 CellularState::Moving => {
@@ -153,16 +165,24 @@ impl SimpleState for HexCellularBuilder {
                         self.world.expand(self.world_radius, self.cell_radius, data);
                         self.state = CellularState::Expanded;
                     }
+                    update_renderer = true;
                 }
                 CellularState::Expanded => {
                     self.world.create_pointer(FovState::Full, data);
                     self.state = CellularState::FieldOfView(true);
                 }
                 CellularState::FieldOfView(..) => {
-                    self.world.update_renderer(data);
+                    update_renderer_world = true;
                     break;
                 }
             }
+        }
+        if update_renderer_world {
+            self.world.update_renderer_world(data);
+            update_renderer = true;
+        }
+        if update_renderer {
+            self.world.update_renderer(data);
         }
         Trans::None
     }
