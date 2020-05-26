@@ -101,20 +101,31 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed, modifiers)) => {
                     if modifiers.shift {
-                        self.world.next_position(MoveMode::StrafeRight, &mut data);
+                        self.world
+                            .next_position(MoveMode::StrafeRightAhead, &mut data);
+                    } else if modifiers.ctrl {
+                        self.world
+                            .next_position(MoveMode::StrafeRightBack, &mut data);
                     } else {
                         self.world.increment_direction(&data);
                     }
                 }
                 Some((VirtualKeyCode::Left, ElementState::Pressed, modifiers)) => {
                     if modifiers.shift {
-                        self.world.next_position(MoveMode::StrafeLeft, &mut data);
+                        self.world
+                            .next_position(MoveMode::StrafeLeftAhead, &mut data);
+                    } else if modifiers.ctrl {
+                        self.world
+                            .next_position(MoveMode::StrafeLeftBack, &mut data);
                     } else {
                         self.world.decrement_direction(&data);
                     }
                 }
                 Some((VirtualKeyCode::Up, ElementState::Pressed, _)) => {
                     self.world.next_position(MoveMode::StraightAhead, &mut data);
+                }
+                Some((VirtualKeyCode::Down, ElementState::Pressed, _)) => {
+                    self.world.next_position(MoveMode::StraightBack, &mut data);
                 }
                 Some((VirtualKeyCode::C, ElementState::Pressed, _)) => {
                     let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();

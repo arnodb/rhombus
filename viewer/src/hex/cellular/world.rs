@@ -68,8 +68,11 @@ pub enum FovState {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MoveMode {
     StraightAhead,
-    StrafeLeft,
-    StrafeRight,
+    StrafeLeftAhead,
+    StrafeLeftBack,
+    StrafeRightAhead,
+    StrafeRightBack,
+    StraightBack,
 }
 
 pub struct World<R: HexRenderer> {
@@ -297,8 +300,11 @@ impl<R: HexRenderer> World<R> {
         if let Some((pointer, _)) = &mut self.pointer {
             let direction = match mode {
                 MoveMode::StraightAhead => pointer.direction(),
-                MoveMode::StrafeLeft => (pointer.direction() + 5) % 6,
-                MoveMode::StrafeRight => (pointer.direction() + 1) % 6,
+                MoveMode::StrafeLeftAhead => (pointer.direction() + 5) % 6,
+                MoveMode::StrafeLeftBack => (pointer.direction() + 4) % 6,
+                MoveMode::StrafeRightAhead => (pointer.direction() + 1) % 6,
+                MoveMode::StrafeRightBack => (pointer.direction() + 2) % 6,
+                MoveMode::StraightBack => (pointer.direction() + 3) % 6,
             };
             let next = pointer.position().neighbor(direction);
             if let Some(HexData {
