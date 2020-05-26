@@ -1,20 +1,17 @@
 use crate::{
     hex::{
         cellular::world::{
-            new_area_renderer, new_edge_renderer, new_tile_renderer, FovState, World,
+            new_area_renderer, new_edge_renderer, new_tile_renderer, FovState, MoveMode, World,
         },
         render::{
             area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
         },
     },
+    input::get_key_and_modifiers,
     world::RhombusViewerWorld,
 };
 use amethyst::{
-    core::timing::Time,
-    ecs::prelude::*,
-    input::{get_key, ElementState},
-    prelude::*,
-    winit::VirtualKeyCode,
+    core::timing::Time, ecs::prelude::*, input::ElementState, prelude::*, winit::VirtualKeyCode,
 };
 use std::sync::Arc;
 
@@ -71,51 +68,59 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
     ) -> SimpleTrans {
         if let StateEvent::Window(event) = event {
             let mut trans = Trans::None;
-            match get_key(&event) {
-                Some((VirtualKeyCode::Escape, ElementState::Pressed)) => {
+            match get_key_and_modifiers(&event) {
+                Some((VirtualKeyCode::Escape, ElementState::Pressed, _)) => {
                     trans = Trans::Pop;
                 }
-                Some((VirtualKeyCode::N, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::N, ElementState::Pressed, _)) => {
                     self.reset(&mut data);
                 }
-                Some((VirtualKeyCode::Key8, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key8, ElementState::Pressed, _)) => {
                     if self.cell_radius < 12 {
                         self.cell_radius += 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Key7, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key7, ElementState::Pressed, _)) => {
                     if self.cell_radius > 0 {
                         self.cell_radius -= 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Key0, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key0, ElementState::Pressed, _)) => {
                     if self.world_radius < 42 {
                         self.world_radius += 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Key9, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::Key9, ElementState::Pressed, _)) => {
                     if self.world_radius > 0 {
                         self.world_radius -= 1;
                         self.reset(&mut data);
                     }
                 }
-                Some((VirtualKeyCode::Right, ElementState::Pressed)) => {
-                    self.world.increment_direction(&data);
+                Some((VirtualKeyCode::Right, ElementState::Pressed, modifiers)) => {
+                    if modifiers.shift {
+                        self.world.next_position(MoveMode::StrafeRight, &mut data);
+                    } else {
+                        self.world.increment_direction(&data);
+                    }
                 }
-                Some((VirtualKeyCode::Left, ElementState::Pressed)) => {
-                    self.world.decrement_direction(&data);
+                Some((VirtualKeyCode::Left, ElementState::Pressed, modifiers)) => {
+                    if modifiers.shift {
+                        self.world.next_position(MoveMode::StrafeLeft, &mut data);
+                    } else {
+                        self.world.decrement_direction(&data);
+                    }
                 }
-                Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
-                    self.world.next_position(&mut data);
+                Some((VirtualKeyCode::Up, ElementState::Pressed, _)) => {
+                    self.world.next_position(MoveMode::StraightAhead, &mut data);
                 }
-                Some((VirtualKeyCode::C, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::C, ElementState::Pressed, _)) => {
                     let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                     world.toggle_follow(&data);
                 }
-                Some((VirtualKeyCode::F, ElementState::Pressed)) => {
+                Some((VirtualKeyCode::F, ElementState::Pressed, _)) => {
                     if let CellularState::FieldOfView(mut fov_enabled) = self.state {
                         fov_enabled = !fov_enabled;
                         self.world.change_field_of_view(if fov_enabled {

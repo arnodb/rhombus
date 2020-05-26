@@ -6,6 +6,7 @@ extern crate derive_new;
 pub mod assets;
 pub mod dodec;
 pub mod hex;
+pub mod input;
 pub mod snake;
 pub mod systems;
 pub mod world;

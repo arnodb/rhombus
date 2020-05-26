@@ -65,6 +65,13 @@ pub enum FovState {
     Full,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MoveMode {
+    StraightAhead,
+    StrafeLeft,
+    StrafeRight,
+}
+
 pub struct World<R: HexRenderer> {
     world: BTreeMap<AxialVector, HexData>,
     renderer: R,
@@ -286,9 +293,14 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn next_position(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn next_position(&mut self, mode: MoveMode, data: &mut StateData<'_, GameData<'_, '_>>) {
         if let Some((pointer, _)) = &mut self.pointer {
-            let next = pointer.position().neighbor(pointer.direction());
+            let direction = match mode {
+                MoveMode::StraightAhead => pointer.direction(),
+                MoveMode::StrafeLeft => (pointer.direction() + 5) % 6,
+                MoveMode::StrafeRight => (pointer.direction() + 1) % 6,
+            };
+            let next = pointer.position().neighbor(direction);
             if let Some(HexData {
                 state: HexState::Open,
                 ..
