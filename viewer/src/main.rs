@@ -121,7 +121,7 @@ impl RhombusViewer {
             // Bumpy hex builders
             HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
             // Cellular hex builders
-            HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new()),
+            HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new_edge()),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)

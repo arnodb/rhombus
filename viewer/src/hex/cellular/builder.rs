@@ -1,5 +1,12 @@
 use crate::{
-    hex::cellular::world::{FovState, World},
+    hex::{
+        cellular::world::{
+            new_area_renderer, new_edge_renderer, new_tile_renderer, FovState, World,
+        },
+        render::{
+            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
+        },
+    },
     world::RhombusViewerWorld,
 };
 use amethyst::{
@@ -18,27 +25,18 @@ enum CellularState {
     FieldOfView(bool),
 }
 
-use super::world::new_edge_renderer as new_renderer;
-use crate::hex::render::edge::EdgeRenderer;
-type Renderer = EdgeRenderer;
-/*
-use super::world::new_tile_renderer as new_renderer;
-use crate::hex::render::tile::TileRenderer;
-type Renderer = TileRenderer;
-*/
-
-pub struct HexCellularBuilder {
-    world: World<Renderer>,
+pub struct HexCellularBuilder<R: HexRenderer> {
+    world: World<R>,
     world_radius: usize,
     cell_radius: usize,
     remaining_millis: u64,
     state: CellularState,
 }
 
-impl HexCellularBuilder {
-    pub fn new() -> Self {
+impl<R: HexRenderer> HexCellularBuilder<R> {
+    fn new(renderer: R) -> Self {
         Self {
-            world: World::new(new_renderer()),
+            world: World::new(renderer),
             world_radius: 12,
             cell_radius: 2,
             remaining_millis: 0,
@@ -54,7 +52,7 @@ impl HexCellularBuilder {
     }
 }
 
-impl SimpleState for HexCellularBuilder {
+impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         world.set_camera_distance(&data, 300.0);
@@ -185,5 +183,23 @@ impl SimpleState for HexCellularBuilder {
             self.world.update_renderer(data);
         }
         Trans::None
+    }
+}
+
+impl HexCellularBuilder<TileRenderer> {
+    pub fn new_tile() -> Self {
+        Self::new(new_tile_renderer())
+    }
+}
+
+impl HexCellularBuilder<EdgeRenderer> {
+    pub fn new_edge() -> Self {
+        Self::new(new_edge_renderer())
+    }
+}
+
+impl HexCellularBuilder<AreaRenderer> {
+    pub fn new_area() -> Self {
+        Self::new(new_area_renderer())
     }
 }

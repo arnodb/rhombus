@@ -2,6 +2,7 @@ use crate::{
     hex::{
         pointer::HexPointer,
         render::{
+            area::AreaRenderer,
             edge::EdgeRenderer,
             renderer::HexRenderer,
             tile::{CellScale, TileRenderer},
@@ -9,16 +10,11 @@ use crate::{
     },
     world::RhombusViewerWorld,
 };
-use amethyst::{
-    ecs::prelude::*,
-    prelude::*,
-    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
-};
+use amethyst::{ecs::prelude::*, prelude::*};
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
     coordinates::{axial::AxialVector, direction::HexagonalDirection},
     field_of_view::FieldOfView,
-    largest_area::LargestAreaIterator,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -47,6 +43,10 @@ pub fn new_edge_renderer() -> EdgeRenderer {
     EdgeRenderer::new()
 }
 
+pub fn new_area_renderer() -> AreaRenderer {
+    AreaRenderer::new()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HexState {
     Open,
@@ -69,8 +69,6 @@ pub struct World<R: HexRenderer> {
     world: BTreeMap<AxialVector, HexData>,
     renderer: R,
     renderer_dirty: bool,
-    open_areas: Option<Entity>,
-    wall_areas: Option<Entity>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
@@ -81,8 +79,6 @@ impl<R: HexRenderer> World<R> {
             world,
             renderer,
             renderer_dirty: false,
-            open_areas: None,
-            wall_areas: None,
             pointer: None,
         }
     }
@@ -136,18 +132,8 @@ impl<R: HexRenderer> World<R> {
         world: &RhombusViewerWorld,
     ) {
         self.delete_pointer(data, world);
-        self.delete_areas(data);
         self.renderer.clear(data);
         self.world.clear();
-    }
-
-    fn delete_areas(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        if let Some(entity) = self.open_areas.take() {
-            data.world.delete_entity(entity).expect("delete entity");
-        }
-        if let Some(entity) = self.wall_areas.take() {
-            data.world.delete_entity(entity).expect("delete entity");
-        }
     }
 
     fn delete_pointer(
@@ -395,103 +381,11 @@ impl<R: HexRenderer> World<R> {
             }
         }
 
-        match fov_state {
-            FovState::Partial => self.update_areas(data, &world, &|_| true),
-            FovState::Full => {
-                self.update_areas(data, &world, &|pos| visible_positions.contains(&pos))
-            }
-        }
-
         self.renderer_dirty = false;
     }
 
     pub fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.renderer.update(data, &world);
-    }
-
-    fn update_areas<F>(
-        &mut self,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-        filter: &F,
-    ) where
-        F: Fn(AxialVector) -> bool,
-    {
-        self.delete_areas(data);
-        self.open_areas = Some(self.create_debug_area(data, world, false, &filter));
-        self.wall_areas = Some(self.create_debug_area(data, world, true, &filter));
-    }
-
-    fn create_debug_area<F>(
-        &self,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-        wall: bool,
-        filter: &F,
-    ) -> Entity
-    where
-        F: Fn(AxialVector) -> bool,
-    {
-        let mut debug_lines_component = DebugLinesComponent::with_capacity(100);
-        let color = if wall {
-            Srgba::new(1.0, 0.0, 0.0, 1.0)
-        } else {
-            Srgba::new(1.0, 1.0, 1.0, 1.0)
-        };
-        let mut largest_area_iterator = LargestAreaIterator::default();
-        if wall {
-            largest_area_iterator.initialize(self.world.iter().filter_map(|(pos, cell_data)| {
-                if filter(*pos) && cell_data.state != HexState::Open {
-                    Some(*pos)
-                } else {
-                    None
-                }
-            }));
-        } else {
-            largest_area_iterator.initialize(self.world.iter().filter_map(|(pos, cell_data)| {
-                if filter(*pos) && cell_data.state == HexState::Open {
-                    Some(*pos)
-                } else {
-                    None
-                }
-            }));
-        }
-        loop {
-            let area = largest_area_iterator.next_largest_area();
-            if area.1.is_none() {
-                break;
-            }
-            if let Some((range_q, range_r)) = area.1 {
-                let mut p1 = world.axial_translation(
-                    (AxialVector::new(*range_q.start(), *range_r.start()), 1.0).into(),
-                );
-                p1[0] -= 3.0_f32.sqrt() / 2.0;
-                p1[2] += 0.5;
-                let mut p2 = world.axial_translation(
-                    (AxialVector::new(*range_q.start(), *range_r.end()), 1.0).into(),
-                );
-                p2[0] -= 1.0 / (3.0_f32.sqrt() * 2.0);
-                p2[2] -= 0.5;
-                let mut p3 = world.axial_translation(
-                    (AxialVector::new(*range_q.end(), *range_r.end()), 1.0).into(),
-                );
-                p3[0] += 3.0_f32.sqrt() / 2.0;
-                p3[2] -= 0.5;
-                let mut p4 = world.axial_translation(
-                    (AxialVector::new(*range_q.end(), *range_r.start()), 1.0).into(),
-                );
-                p4[0] += 1.0 / (3.0_f32.sqrt() * 2.0);
-                p4[2] += 0.5;
-                debug_lines_component.add_line(p1.into(), p2.into(), color);
-                debug_lines_component.add_line(p2.into(), p3.into(), color);
-                debug_lines_component.add_line(p3.into(), p4.into(), color);
-                debug_lines_component.add_line(p4.into(), p1.into(), color);
-            }
-        }
-        data.world
-            .create_entity()
-            .with(debug_lines_component)
-            .build()
     }
 }

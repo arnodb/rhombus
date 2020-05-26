@@ -16,37 +16,9 @@ struct CellData {
 }
 
 impl LargestAreaIterator {
-    pub fn initialize<I>(&mut self, positions: I)
-    where
-        I: Iterator<Item = AxialVector>,
-    {
+    pub fn start_accumulation<'a>(&'a mut self) -> Accumulator<'a> {
         self.data.clear();
-        let mut previous_q = BTreeMap::<isize, (isize, CellData)>::new();
-        let mut previous_r = BTreeMap::<isize, (isize, CellData)>::new();
-        for pos in positions {
-            let mut cell_data = CellData { h: 0, w: 0 };
-            if let Some((prev_q, prev_cell_data)) = previous_r.get(&pos.r()) {
-                if prev_q + 1 == pos.q() {
-                    cell_data.h = prev_cell_data.h + 1;
-                } else {
-                    cell_data.h = 1;
-                }
-            } else {
-                cell_data.h = 1;
-            }
-            if let Some((prev_r, prev_cell_data)) = previous_q.get(&pos.q()) {
-                if prev_r + 1 == pos.r() {
-                    cell_data.w = prev_cell_data.w + 1;
-                } else {
-                    cell_data.w = 1;
-                }
-            } else {
-                cell_data.w = 1;
-            }
-            self.data.insert(pos, cell_data);
-            previous_q.insert(pos.q(), (pos.r(), cell_data));
-            previous_r.insert(pos.r(), (pos.q(), cell_data));
-        }
+        Accumulator::new(self)
     }
 
     pub fn next_largest_area(
@@ -122,5 +94,48 @@ impl LargestAreaIterator {
         }
         debug_assert!(largest_area.1.is_some() || self.data.is_empty());
         largest_area
+    }
+}
+
+pub struct Accumulator<'a> {
+    lai: &'a mut LargestAreaIterator,
+    previous_q: BTreeMap<isize, (isize, CellData)>,
+    previous_r: BTreeMap<isize, (isize, CellData)>,
+}
+
+impl<'a> Accumulator<'a> {
+    fn new(lai: &'a mut LargestAreaIterator) -> Self {
+        Self {
+            lai,
+            previous_q: BTreeMap::new(),
+            previous_r: BTreeMap::new(),
+        }
+    }
+
+    pub fn push(&mut self, position: AxialVector) {
+        let mut cell_data = CellData { h: 0, w: 0 };
+        if let Some((prev_q, prev_cell_data)) = self.previous_r.get(&position.r()) {
+            if prev_q + 1 == position.q() {
+                cell_data.h = prev_cell_data.h + 1;
+            } else {
+                cell_data.h = 1;
+            }
+        } else {
+            cell_data.h = 1;
+        }
+        if let Some((prev_r, prev_cell_data)) = self.previous_q.get(&position.q()) {
+            if prev_r + 1 == position.r() {
+                cell_data.w = prev_cell_data.w + 1;
+            } else {
+                cell_data.w = 1;
+            }
+        } else {
+            cell_data.w = 1;
+        }
+        self.lai.data.insert(position, cell_data);
+        self.previous_q
+            .insert(position.q(), (position.r(), cell_data));
+        self.previous_r
+            .insert(position.r(), (position.q(), cell_data));
     }
 }
