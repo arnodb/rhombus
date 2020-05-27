@@ -156,18 +156,7 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn apply_cellular_automaton<RaiseF, RemainF>(
-        &mut self,
-        radius: usize,
-        cell_radius: usize,
-        raise_wall_test: RaiseF,
-        remain_wall_test: RemainF,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-    ) -> bool
-    where
-        RaiseF: Fn(u8) -> bool,
-        RemainF: Fn(u8) -> bool,
-    {
+    pub fn cellular_automaton_phase1_step1(&mut self, radius: usize, cell_radius: usize) {
         for hex_data in self.world.values_mut() {
             hex_data.automaton_count = 0;
         }
@@ -187,6 +176,39 @@ impl<R: HexRenderer> World<R> {
                 }
             }
         }
+    }
+
+    pub fn cellular_automaton_phase2_step1(&mut self) {
+        for hex_data in self.world.values_mut() {
+            hex_data.automaton_count = 0;
+        }
+        let keys = self.world.keys().cloned().collect::<Vec<_>>();
+        for cell in keys {
+            let hex_state = self.world.get(&cell).unwrap().state;
+            let is_wall = match hex_state {
+                HexState::Wall | HexState::HardWall => true,
+                HexState::Open => false,
+            };
+            if is_wall {
+                for neighbor in cell.ring_iter(1) {
+                    if let Some(hex_data) = self.world.get_mut(&neighbor) {
+                        hex_data.automaton_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn cellular_automaton_step2<RaiseF, RemainF>(
+        &mut self,
+        raise_wall_test: RaiseF,
+        remain_wall_test: RemainF,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+    ) -> bool
+    where
+        RaiseF: Fn(u8) -> bool,
+        RemainF: Fn(u8) -> bool,
+    {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         let mut frozen = true;
         for (pos, hex_data) in &mut self.world {
