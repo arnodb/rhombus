@@ -116,6 +116,21 @@ impl<H> RectStorage<H> {
         self.option_bits = 0;
     }
 
+    pub fn entry(&mut self, x: usize, y: usize) -> RectEntry<H> {
+        Self::check_bounds(x, y);
+        let offset = x + y * RECT_X_LEN;
+        if self.option_bits & (1 << offset as u64) != 0 {
+            RectEntry::Occupied(RectOccupiedEntry {
+                hex: unsafe { &mut *self.hexes[offset].as_mut_ptr() },
+            })
+        } else {
+            RectEntry::Vacant(RectVacantEntry {
+                storage: self,
+                offset,
+            })
+        }
+    }
+
     fn check_bounds(x: usize, y: usize) {
         if x >= RECT_X_LEN || y >= RECT_Y_LEN {
             panic!("Coordinates out of bounds");
@@ -255,6 +270,77 @@ impl<'a, H> Iterator for HexesMut<'a, H> {
     }
 
     // TODO size_hint
+}
+
+pub enum RectEntry<'a, H> {
+    Occupied(RectOccupiedEntry<'a, H>),
+    Vacant(RectVacantEntry<'a, H>),
+}
+
+impl<'a, H> RectEntry<'a, H> {
+    pub fn and_modify<F>(self, f: F) -> Self
+    where
+        F: FnOnce(&mut H),
+    {
+        match self {
+            RectEntry::Occupied(mut entry) => {
+                f(entry.get_mut());
+                RectEntry::Occupied(entry)
+            }
+            RectEntry::Vacant(entry) => RectEntry::Vacant(entry),
+        }
+    }
+
+    pub fn or_insert(self, default: H) -> &'a mut H {
+        match self {
+            RectEntry::Occupied(entry) => entry.into_mut(),
+            RectEntry::Vacant(entry) => entry.insert(default),
+        }
+    }
+
+    pub fn or_insert_with<F: FnOnce() -> H>(self, default: F) -> &'a mut H {
+        match self {
+            RectEntry::Occupied(entry) => entry.into_mut(),
+            RectEntry::Vacant(entry) => entry.insert(default()),
+        }
+    }
+}
+
+pub struct RectOccupiedEntry<'a, H> {
+    hex: &'a mut H,
+}
+
+impl<'a, H> RectOccupiedEntry<'a, H> {
+    pub fn get(&self) -> &H {
+        self.hex
+    }
+
+    pub fn get_mut(&mut self) -> &mut H {
+        self.hex
+    }
+
+    pub fn into_mut(self) -> &'a mut H {
+        self.hex
+    }
+}
+
+pub struct RectVacantEntry<'a, H> {
+    storage: &'a mut RectStorage<H>,
+    offset: usize,
+}
+
+impl<'a, H> RectVacantEntry<'a, H> {
+    pub fn insert(self, hex: H) -> &'a mut H {
+        if self.storage.option_bits & 1 << self.offset as u64 == 0 {
+            self.storage.option_bits |= 1 << self.offset as u64;
+            unsafe {
+                std::ptr::write(self.storage.hexes[self.offset].as_mut_ptr(), hex);
+            }
+            unsafe { &mut *self.storage.hexes[self.offset].as_mut_ptr() }
+        } else {
+            unreachable!();
+        }
+    }
 }
 
 #[test]
@@ -493,6 +579,7 @@ fn test_rect_storage_drop_should_drop_content() {
     drop(storage);
     assert_eq!(*counter.borrow(), 3);
 }
+
 #[test]
 fn test_rect_storage_clear_should_drop_content() {
     use std::cell::RefCell;
@@ -522,4 +609,54 @@ fn test_rect_storage_clear_should_drop_content() {
     assert_eq!(*counter.borrow(), 1);
     storage.clear();
     assert_eq!(*counter.borrow(), 3);
+}
+
+#[test]
+fn test_rect_storage_should_have_entry_api() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct Hex {
+        value: usize,
+    }
+    let mut storage = RectStorage::new();
+
+    // or_insert...
+    // and_modify...
+    assert_eq!(storage.get(3, 5), None);
+    storage.entry(3, 5).or_insert(Hex { value: 1 });
+    assert_eq!(storage.get(3, 5), Some(&Hex { value: 1 }));
+    storage.entry(3, 5).and_modify(|hex| hex.value += 1);
+    assert_eq!(storage.get(3, 5), Some(&Hex { value: 2 }));
+    storage.entry(3, 5).or_insert(Hex { value: 1 });
+    assert_eq!(storage.get(3, 5), Some(&Hex { value: 2 }));
+    storage.entry(3, 5).or_insert(Hex { value: 1 }).value += 1;
+    assert_eq!(storage.get(3, 5), Some(&Hex { value: 3 }));
+
+    // or_insert_with...
+    // and_modify...
+    // and_modify...
+    assert_eq!(storage.get(7, 2), None);
+    storage.entry(7, 2).or_insert_with(|| Hex { value: 11 });
+    assert_eq!(storage.get(7, 2), Some(&Hex { value: 11 }));
+    storage
+        .entry(7, 2)
+        .and_modify(|hex| hex.value += 1)
+        .and_modify(|hex| hex.value += 1);
+    assert_eq!(storage.get(7, 2), Some(&Hex { value: 13 }));
+    storage.entry(7, 2).or_insert_with(|| Hex { value: 11 });
+    assert_eq!(storage.get(7, 2), Some(&Hex { value: 13 }));
+    storage
+        .entry(7, 2)
+        .or_insert_with(|| Hex { value: 11 })
+        .value += 1;
+    assert_eq!(storage.get(7, 2), Some(&Hex { value: 14 }));
+
+    // get, get_mut, into_mut
+    if let RectEntry::Occupied(mut entry) = storage.entry(7, 2) {
+        assert_eq!(entry.get().value, 14);
+        entry.get_mut().value += 1;
+        assert_eq!(entry.get_mut().value, 15);
+        assert_eq!(entry.into_mut().value, 15);
+    } else {
+        panic!();
+    }
 }
