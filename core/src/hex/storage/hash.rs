@@ -263,6 +263,9 @@ fn test_rect_hash_storage_should_give_access_to_hex() {
         Some(&Hex { value: 42 })
     );
     assert_eq!(storage.get(AxialVector::new(0, 0)), None);
+
+    assert_eq!(storage.len(), 1);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -280,6 +283,9 @@ fn test_rect_hash_storage_should_give_mutable_access_to_hex() {
         Some(&Hex { value: 12 })
     );
     assert_eq!(storage.get(AxialVector::new(0, 0)), None);
+
+    assert_eq!(storage.len(), 1);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -290,6 +296,9 @@ fn test_rect_hash_storage_should_contain_position() {
     storage.insert(AxialVector::new(12, -42), Hex);
     assert!(storage.contains_position(AxialVector::new(12, -42)));
     assert!(!storage.contains_position(AxialVector::new(0, 0)));
+
+    assert_eq!(storage.len(), 1);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -319,6 +328,9 @@ fn test_rect_hash_storage_coordinates() {
             );
         }
     }
+
+    assert_eq!(storage.len(), 400);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -352,6 +364,9 @@ fn test_rect_hash_storage_should_iterate_over_positions_and_hexes() {
             (AxialVector::new(-5, 24), 7)
         ]
     );
+
+    assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -400,6 +415,9 @@ fn test_rect_hash_storage_should_iterate_over_positions_and_mutable_hexes() {
             (AxialVector::new(-5, 24), 0)
         ]
     );
+
+    assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -432,6 +450,9 @@ fn test_rect_hash_storage_should_iterate_over_positions() {
             AxialVector::new(-5, 24)
         ]
     );
+
+    assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -461,6 +482,9 @@ fn test_rect_hash_storage_should_iterate_over_hexes() {
             .collect::<std::collections::HashSet<_>>(),
         hashset![1, 42, 7]
     );
+
+    assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -501,6 +525,9 @@ fn test_rect_hash_storage_should_iterate_over_mutable_hexes() {
             .collect::<std::collections::HashSet<_>>(),
         hashset![0, 0, 0]
     );
+
+    assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
 }
 
 #[test]
@@ -513,6 +540,9 @@ fn test_rect_hash_storage_should_remove_hexes() {
     let removed = storage.remove(AxialVector::new(12, -42));
     assert!(removed.is_some());
     assert!(storage.get(AxialVector::new(12, -42)).is_none());
+
+    assert_eq!(storage.len(), 0);
+    assert!(storage.is_empty());
 }
 
 #[test]
@@ -600,4 +630,7 @@ fn test_rect_hash_storage_should_have_entry_api() {
     } else {
         panic!();
     }
+
+    assert_eq!(storage.len(), 2);
+    assert!(!storage.is_empty());
 }
