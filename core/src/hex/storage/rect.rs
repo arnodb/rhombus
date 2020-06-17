@@ -44,6 +44,10 @@ impl<H> RectStorage<H> {
         self.option_bits & (1 << offset as u64) != 0
     }
 
+    pub fn len(&self) -> usize {
+        self.option_bits.count_ones() as usize
+    }
+
     pub fn iter(&self) -> Iter<H> {
         Iter {
             storage: self,
@@ -171,7 +175,10 @@ impl<'a, H> Iterator for Iter<'a, H> {
         None
     }
 
-    // TODO size_hint
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let length = self.storage.len();
+        (length, Some(length))
+    }
 }
 
 pub struct IterMut<'a, H> {
@@ -197,7 +204,10 @@ impl<'a, H> Iterator for IterMut<'a, H> {
         None
     }
 
-    // TODO size_hint
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let length = self.storage.len();
+        (length, Some(length))
+    }
 }
 
 pub struct Positions<'a, H> {
@@ -221,7 +231,10 @@ impl<'a, H> Iterator for Positions<'a, H> {
         None
     }
 
-    // TODO size_hint
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let length = self.storage.len();
+        (length, Some(length))
+    }
 }
 
 pub struct Hexes<'a, H> {
@@ -245,7 +258,10 @@ impl<'a, H> Iterator for Hexes<'a, H> {
         None
     }
 
-    // TODO size_hint
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let length = self.storage.len();
+        (length, Some(length))
+    }
 }
 
 pub struct HexesMut<'a, H> {
@@ -269,7 +285,10 @@ impl<'a, H> Iterator for HexesMut<'a, H> {
         None
     }
 
-    // TODO size_hint
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let length = self.storage.len();
+        (length, Some(length))
+    }
 }
 
 pub enum RectEntry<'a, H> {
@@ -351,6 +370,7 @@ fn test_rect_storage_should_give_access_to_hex() {
     }
     let mut storage = RectStorage::new();
     storage.insert(3, 5, Hex { value: 42 });
+    assert_eq!(storage.len(), 1);
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(0, 0), None);
 }
@@ -363,6 +383,7 @@ fn test_rect_storage_should_give_mutable_access_to_hex() {
     }
     let mut storage = RectStorage::new();
     storage.insert(3, 5, Hex { value: 42 });
+    assert_eq!(storage.len(), 1);
     storage.get_mut(3, 5).unwrap().value = 12;
     assert_eq!(storage.get_mut(0, 0), None);
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 12 }));
@@ -375,6 +396,7 @@ fn test_rect_storage_should_contain_position() {
     struct Hex;
     let mut storage = RectStorage::new();
     storage.insert(3, 5, Hex);
+    assert_eq!(storage.len(), 1);
     assert!(storage.contains_position(3, 5));
     assert!(!storage.contains_position(0, 0));
 }
@@ -397,6 +419,7 @@ fn test_rect_storage_coordinates() {
             );
         }
     }
+    assert_eq!(storage.len(), 64);
     for x in 0..RECT_X_LEN {
         for y in 0..RECT_Y_LEN {
             assert_eq!(
@@ -423,6 +446,7 @@ fn test_rect_storage_should_iterate_over_positions_and_hexes() {
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(7, 7), Some(&Hex { value: 12 }));
     assert_eq!(storage.get(0, 0), Some(&Hex { value: 1 }));
+    assert_eq!(storage.iter().size_hint(), (3, Some(3)));
     assert_eq!(
         storage
             .iter()
@@ -446,6 +470,7 @@ fn test_rect_storage_should_iterate_over_positions_and_mutable_hexes() {
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(7, 7), Some(&Hex { value: 12 }));
     assert_eq!(storage.get(0, 0), Some(&Hex { value: 1 }));
+    assert_eq!(storage.iter_mut().size_hint(), (3, Some(3)));
     assert_eq!(
         storage
             .iter_mut()
@@ -457,6 +482,7 @@ fn test_rect_storage_should_iterate_over_positions_and_mutable_hexes() {
             .collect::<Vec<_>>(),
         vec![(0, 0, 1), (3, 5, 42), (7, 7, 12)]
     );
+    assert_eq!(storage.iter_mut().size_hint(), (3, Some(3)));
     assert_eq!(
         storage
             .iter_mut()
@@ -480,6 +506,7 @@ fn test_rect_storage_should_iterate_over_positions() {
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(7, 7), Some(&Hex { value: 12 }));
     assert_eq!(storage.get(0, 0), Some(&Hex { value: 1 }));
+    assert_eq!(storage.positions().size_hint(), (3, Some(3)));
     assert_eq!(
         storage.positions().collect::<Vec<_>>(),
         vec![(0, 0), (3, 5), (7, 7)]
@@ -500,6 +527,7 @@ fn test_rect_storage_should_iterate_over_hexes() {
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(7, 7), Some(&Hex { value: 12 }));
     assert_eq!(storage.get(0, 0), Some(&Hex { value: 1 }));
+    assert_eq!(storage.hexes().size_hint(), (3, Some(3)));
     assert_eq!(
         storage.hexes().map(|hex| hex.value).collect::<Vec<_>>(),
         vec![1, 42, 12]
@@ -520,6 +548,7 @@ fn test_rect_storage_should_iterate_over_mutable_hexes() {
     assert_eq!(storage.get(3, 5), Some(&Hex { value: 42 }));
     assert_eq!(storage.get(7, 7), Some(&Hex { value: 12 }));
     assert_eq!(storage.get(0, 0), Some(&Hex { value: 1 }));
+    assert_eq!(storage.hexes_mut().size_hint(), (3, Some(3)));
     assert_eq!(
         storage
             .hexes_mut()
@@ -531,6 +560,7 @@ fn test_rect_storage_should_iterate_over_mutable_hexes() {
             .collect::<Vec<_>>(),
         vec![1, 42, 12]
     );
+    assert_eq!(storage.hexes_mut().size_hint(), (3, Some(3)));
     assert_eq!(
         storage.hexes_mut().map(|hex| hex.value).collect::<Vec<_>>(),
         vec![0, 0, 0]
