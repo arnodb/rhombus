@@ -153,8 +153,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
 
     fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> SimpleTrans {
         if let CellularState::FieldOfView(..) = self.state {
-            self.world.update_renderer_world(data);
-            self.world.update_renderer(data);
+            self.world.update_renderer_world(false, data);
             self.remaining_millis = 0;
             return Trans::None;
         }
@@ -164,8 +163,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
         } + self.remaining_millis;
         let num = delta_millis / 500;
         self.remaining_millis = delta_millis % 500;
-        let mut update_renderer_world = false;
-        let mut update_renderer = false;
+        let mut force_update = false;
         for _ in 0..num {
             match self.state {
                 CellularState::GrowingPhase1 => {
@@ -174,45 +172,35 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                     let frozen = self.world.cellular_automaton_step2(
                         |count| count >= 5 && count <= 6,
                         |count| count >= 3 && count <= 6,
-                        data,
                     );
                     if frozen {
-                        self.world.expand(self.world_radius, self.cell_radius, data);
+                        self.world.expand(self.world_radius, self.cell_radius);
+                        force_update = true;
                         self.state = CellularState::GrowingPhase2(2);
                     }
-                    update_renderer = true;
                 }
                 CellularState::GrowingPhase2(countdown) => {
                     self.world.cellular_automaton_phase2_step1();
                     self.world.cellular_automaton_step2(
                         |count| count >= 3 && count <= 6,
                         |count| count >= 3 && count <= 6,
-                        data,
                     );
                     if countdown > 1 {
                         self.state = CellularState::GrowingPhase2(countdown - 1)
                     } else {
                         self.state = CellularState::Grown;
                     }
-                    update_renderer = true;
                 }
                 CellularState::Grown => {
                     self.world.create_pointer(FovState::Full, data);
                     self.state = CellularState::FieldOfView(true);
                 }
                 CellularState::FieldOfView(..) => {
-                    update_renderer_world = true;
                     break;
                 }
             }
         }
-        if update_renderer_world {
-            self.world.update_renderer_world(data);
-            update_renderer = true;
-        }
-        if update_renderer {
-            self.world.update_renderer(data);
-        }
+        self.world.update_renderer_world(force_update, data);
         Trans::None
     }
 }

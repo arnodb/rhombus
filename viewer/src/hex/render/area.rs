@@ -1,10 +1,13 @@
-use crate::{hex::render::renderer::HexRenderer, world::RhombusViewerWorld};
+use crate::{dispose::Dispose, hex::render::renderer::HexRenderer, world::RhombusViewerWorld};
 use amethyst::{
     ecs::prelude::*,
     prelude::*,
     renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
 };
-use rhombus_core::hex::{coordinates::axial::AxialVector, largest_area::LargestAreaIterator};
+use rhombus_core::hex::{
+    coordinates::axial::AxialVector, largest_area::LargestAreaIterator,
+    storage::hash::RectHashStorage,
+};
 
 pub struct AreaRenderer {
     entity: Option<Entity>,
@@ -17,45 +20,29 @@ impl AreaRenderer {
 }
 
 impl HexRenderer for AreaRenderer {
-    fn insert_cell(
-        &mut self,
-        _position: AxialVector,
-        _wall: bool,
-        _visible: bool,
-        _data: &mut StateData<'_, GameData<'_, '_>>,
-        _world: &RhombusViewerWorld,
-    ) {
+    type Hex = ();
+
+    fn new_hex(&mut self, _wall: bool, _visible: bool) {
+        ()
     }
 
-    fn update_cell(
-        &mut self,
-        _position: AxialVector,
-        _wall: bool,
-        _visible: bool,
-        _data: &mut StateData<'_, GameData<'_, '_>>,
-        _world: &RhombusViewerWorld,
-    ) {
-    }
+    fn set_cell_radius(&mut self, _cell_radius: usize) {}
 
-    fn set_cell_radius(
+    fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
-        _cell_radius: usize,
-        _data: &mut StateData<'_, GameData<'_, '_>>,
-    ) {
-    }
-
-    fn update_world<'a, C, I, Wall, Visible>(
-        &mut self,
-        cells: I,
-        is_wall_cell: Wall,
-        _is_visible_cell: Visible,
+        hexes: &mut RectHashStorage<StorageHex>,
+        is_wall_hex: Wall,
+        is_visible_hex: Visible,
+        _get_renderer_hex: MapHex,
+        visible_only: bool,
+        _force: bool,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) where
-        C: 'a,
-        I: Iterator<Item = (&'a AxialVector, &'a C)>,
-        Wall: Fn(AxialVector, &C) -> bool,
-        Visible: Fn(AxialVector, &C) -> bool,
+        StorageHex: 'a + Dispose,
+        MapHex: Fn(&mut StorageHex) -> &mut Self::Hex,
+        Wall: Fn(AxialVector, &StorageHex) -> bool,
+        Visible: Fn(AxialVector, &StorageHex) -> bool,
     {
         self.clear(data);
 
@@ -64,13 +51,15 @@ impl HexRenderer for AreaRenderer {
         let mut ground_lai = LargestAreaIterator::default();
         let mut ground_acc = ground_lai.start_accumulation();
 
-        for (position, cell) in cells {
-            if is_wall_cell(*position, cell) {
-                &mut wall_acc
-            } else {
-                &mut ground_acc
+        for (position, hex) in hexes.iter() {
+            if !visible_only || is_visible_hex(position, hex) {
+                if is_wall_hex(position, hex) {
+                    &mut wall_acc
+                } else {
+                    &mut ground_acc
+                }
+                .push(position);
             }
-            .push(*position);
         }
 
         let mut debug_lines = DebugLinesComponent::with_capacity(100);
