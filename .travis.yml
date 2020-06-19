@@ -9,8 +9,6 @@ before_install:
 matrix:
   include:
     - rust: stable
-    - rust: beta
-    - rust: nightly
     - rust: nightly
       env:
         - COVERAGE=1

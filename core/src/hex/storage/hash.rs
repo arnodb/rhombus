@@ -1,15 +1,17 @@
 use crate::{
     hex::{
-        coordinates::axial::AxialVector,
-        storage::rect::{
-            RectEntry, RectOccupiedEntry, RectStorage, RectVacantEntry, RECT_X_LEN, RECT_Y_LEN,
+        coordinates::{axial::AxialVector, direction::HexagonalDirection},
+        storage::{
+            adjacent::HexWithAdjacentsMut,
+            rect::{
+                RectEntry, RectOccupiedEntry, RectStorage, RectVacantEntry, RECT_X_LEN, RECT_Y_LEN,
+            },
         },
     },
     vector::Vector2ISize,
 };
 use std::collections::{hash_map::Entry, HashMap};
 
-#[derive(Default)]
 pub struct RectHashStorage<H> {
     rects: HashMap<Vector2ISize, RectStorage<H>>,
     len: usize,
@@ -105,6 +107,71 @@ impl<H> RectHashStorage<H> {
         self.rects.values_mut().flat_map(|rect| rect.hexes_mut())
     }
 
+    pub fn positions_and_hexes_with_adjacents_mut<'a>(
+        &'a mut self,
+    ) -> impl Iterator<Item = (AxialVector, HexWithAdjacentsMut<'a, &'a mut H, H>)> {
+        let self_ptr = self as *mut Self;
+        self.rects.iter().flat_map(move |(rect_origin, rect)| {
+            rect.positions().map(move |(x, y)| {
+                let position = AxialVector::new(
+                    rect_origin.x * RECT_X_LEN as isize + x as isize,
+                    rect_origin.y * RECT_Y_LEN as isize + y as isize,
+                );
+                (
+                    position,
+                    unsafe { &mut *self_ptr }
+                        .hex_with_adjacents_mut(position)
+                        .unwrap(),
+                )
+            })
+        })
+    }
+
+    fn hex_with_adjacents_mut(
+        &mut self,
+        position: AxialVector,
+    ) -> HexWithAdjacentsMut<Option<&mut H>, H> {
+        let mut rects_len = 0;
+        let mut rects: [(Vector2ISize, Option<&mut RectStorage<H>>); 4] = Default::default();
+        let mut get = |pos: AxialVector| -> Option<&mut H> {
+            let x = pos.q().div_euclid(RECT_X_LEN as isize);
+            let y = pos.r().div_euclid(RECT_Y_LEN as isize);
+            let rect_pos = Vector2ISize { x, y };
+            let mut index = 0;
+            while index < rects_len && rects[index].0 != rect_pos {
+                index += 1;
+            }
+            if index >= rects_len {
+                if index < rects.len() {
+                    rects[index] = (
+                        rect_pos,
+                        unsafe { &mut *(self as *mut Self) }
+                            .rects
+                            .get_mut(&rect_pos),
+                    );
+                    rects_len += 1;
+                } else {
+                    unreachable!();
+                }
+            }
+            rects[index].1.as_mut().and_then(|rect| {
+                unsafe { &mut *(*rect as *mut RectStorage<H>) }.get_mut(
+                    pos.q().rem_euclid(RECT_X_LEN as isize) as usize,
+                    pos.r().rem_euclid(RECT_Y_LEN as isize) as usize,
+                )
+            })
+        };
+        HexWithAdjacentsMut::new(
+            get(position),
+            get(position + AxialVector::direction(0)),
+            get(position + AxialVector::direction(1)),
+            get(position + AxialVector::direction(2)),
+            get(position + AxialVector::direction(3)),
+            get(position + AxialVector::direction(4)),
+            get(position + AxialVector::direction(5)),
+        )
+    }
+
     pub fn insert(&mut self, position: AxialVector, hex: H) -> Option<H> {
         let x = position.q().div_euclid(RECT_X_LEN as isize);
         let y = position.r().div_euclid(RECT_Y_LEN as isize);
@@ -183,6 +250,12 @@ impl<H> RectHashStorage<H> {
                 },
             ),
         }
+    }
+}
+
+impl<H> Default for RectHashStorage<H> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -527,6 +600,68 @@ fn test_rect_hash_storage_should_iterate_over_mutable_hexes() {
     );
 
     assert_eq!(storage.len(), 3);
+    assert!(!storage.is_empty());
+}
+
+#[test]
+fn test_rect_hash_storage_should_iterate_over_mutable_hexes_with_adjacents() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct Hex {
+        value: usize,
+    }
+    let mut storage = RectHashStorage::new();
+
+    storage.insert(AxialVector::new(12, -42), Hex { value: 42 });
+    storage.insert(AxialVector::new(13, -42), Hex { value: 61 });
+    storage.insert(AxialVector::new(12, -43), Hex { value: 62 });
+    storage.insert(AxialVector::new(11, -41), Hex { value: 63 });
+
+    let mut count = 0;
+    for (position, mut hex_with_adjacents) in storage.positions_and_hexes_with_adjacents_mut() {
+        if position == AxialVector::new(12, -42) {
+            assert_eq!(hex_with_adjacents.hex().value, 42);
+            assert_eq!(hex_with_adjacents.adjacent(0).map(|h| h.value), Some(61));
+            assert_eq!(hex_with_adjacents.adjacent(1), None);
+            assert_eq!(hex_with_adjacents.adjacent(2).map(|h| h.value), Some(62));
+            assert_eq!(hex_with_adjacents.adjacent(3), None);
+            assert_eq!(hex_with_adjacents.adjacent(4).map(|h| h.value), Some(63));
+            assert_eq!(hex_with_adjacents.adjacent(5), None);
+            count += 1;
+        }
+        if position == AxialVector::new(13, -42) {
+            assert_eq!(hex_with_adjacents.hex().value, 61);
+            assert_eq!(hex_with_adjacents.adjacent(0), None);
+            assert_eq!(hex_with_adjacents.adjacent(1), None);
+            assert_eq!(hex_with_adjacents.adjacent(2), None);
+            assert_eq!(hex_with_adjacents.adjacent(3).map(|h| h.value), Some(42));
+            assert_eq!(hex_with_adjacents.adjacent(4), None);
+            assert_eq!(hex_with_adjacents.adjacent(5), None);
+            count += 1;
+        }
+        if position == AxialVector::new(12, -43) {
+            assert_eq!(hex_with_adjacents.hex().value, 62);
+            assert_eq!(hex_with_adjacents.adjacent(0), None);
+            assert_eq!(hex_with_adjacents.adjacent(1), None);
+            assert_eq!(hex_with_adjacents.adjacent(2), None);
+            assert_eq!(hex_with_adjacents.adjacent(3), None);
+            assert_eq!(hex_with_adjacents.adjacent(4), None);
+            assert_eq!(hex_with_adjacents.adjacent(5).map(|h| h.value), Some(42));
+            count += 1;
+        }
+        if position == AxialVector::new(11, -41) {
+            assert_eq!(hex_with_adjacents.hex().value, 63);
+            assert_eq!(hex_with_adjacents.adjacent(0), None);
+            assert_eq!(hex_with_adjacents.adjacent(1).map(|h| h.value), Some(42));
+            assert_eq!(hex_with_adjacents.adjacent(2), None);
+            assert_eq!(hex_with_adjacents.adjacent(3), None);
+            assert_eq!(hex_with_adjacents.adjacent(4), None);
+            assert_eq!(hex_with_adjacents.adjacent(5), None);
+            count += 1;
+        }
+    }
+    assert_eq!(count, 4);
+
+    assert_eq!(storage.len(), 4);
     assert!(!storage.is_empty());
 }
 
