@@ -1,4 +1,6 @@
-use crate::{assets::Color, hex::render::renderer::HexRenderer, world::RhombusViewerWorld};
+use crate::{
+    assets::Color, dispose::Dispose, hex::render::renderer::HexRenderer, world::RhombusViewerWorld,
+};
 use amethyst::{
     assets::Handle,
     core::{math::Vector3, transform::Transform},
@@ -6,52 +8,45 @@ use amethyst::{
     prelude::*,
     renderer::Material,
 };
-use itertools::{EitherOrBoth, Itertools};
-use rhombus_core::hex::coordinates::axial::AxialVector;
-use std::{
-    cell::RefCell,
-    collections::{btree_map::Entry, BTreeMap},
-};
+use rhombus_core::hex::{coordinates::axial::AxialVector, storage::hash::RectHashStorage};
 
 #[derive(Clone, Copy, Debug)]
-pub struct CellScale {
+pub struct HexScale {
     pub horizontal: f32,
     pub vertical: f32,
 }
 
 #[derive(Debug)]
-struct Cell {
-    entity: Entity,
+pub struct Hex {
+    entity: Option<Entity>,
     wall: bool,
     visible: bool,
 }
 
-impl Cell {
-    fn delete_entity(self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        data.world
-            .delete_entity(self.entity)
-            .expect("delete entity");
+impl Dispose for Hex {
+    fn dispose(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if let Some(entity) = self.entity.take() {
+            data.world.delete_entity(entity).expect("delete entity");
+        }
     }
 }
 
 pub struct TileRenderer {
-    ground_scale: CellScale,
-    wall_scale: CellScale,
+    ground_scale: HexScale,
+    wall_scale: HexScale,
     cell_radius: usize,
-    world: RefCell<BTreeMap<AxialVector, Cell>>,
 }
 
 impl TileRenderer {
-    pub fn new(ground_scale: CellScale, wall_scale: CellScale, cell_radius: usize) -> Self {
+    pub fn new(ground_scale: HexScale, wall_scale: HexScale, cell_radius: usize) -> Self {
         Self {
             ground_scale,
             wall_scale,
             cell_radius,
-            world: RefCell::new(BTreeMap::new()),
         }
     }
 
-    fn get_scale(&self, wall: bool, cell_radius: usize) -> CellScale {
+    fn get_scale(&self, wall: bool, cell_radius: usize) -> HexScale {
         let mut scale = if wall {
             self.wall_scale
         } else {
@@ -82,7 +77,7 @@ impl TileRenderer {
 
     fn create_hex(
         position: AxialVector,
-        scale: CellScale,
+        scale: HexScale,
         material: Handle<Material>,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
@@ -103,38 +98,64 @@ impl TileRenderer {
             .build()
     }
 
-    fn update_cell_internal(
+    pub fn update_hex(
         &self,
-        cell: &mut Cell,
+        position: AxialVector,
+        hex: &mut Hex,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+    ) {
+        let scale = self.get_scale(hex.wall, self.cell_radius);
+        let material = self.get_material(hex.wall, hex.visible, world);
+        if let Some(entity) = hex.entity {
+            Self::update_hex_transform(entity, scale, &mut data.world.write_storage::<Transform>());
+            Self::update_hex_color(
+                entity,
+                material,
+                &mut data.world.write_storage::<Handle<Material>>(),
+            );
+        } else {
+            hex.entity = Some(Self::create_hex(position, scale, material, data, world));
+        }
+    }
+
+    fn update_hex_internal(
+        &self,
+        hex: &mut Hex,
         wall: bool,
         visible: bool,
-        scale: CellScale,
+        scale: HexScale,
+        force: bool,
         world: &RhombusViewerWorld,
         transform_storage: &mut WriteStorage<Transform>,
         material_storage: &mut WriteStorage<Handle<Material>>,
     ) {
-        if cell.wall != wall {
-            Self::update_cell_transform(cell, scale, transform_storage);
+        if let Some(entity) = hex.entity {
+            if force || hex.wall != wall {
+                Self::update_hex_transform(entity, scale, transform_storage);
+            }
+            if force || hex.wall != wall || hex.visible != visible {
+                Self::update_hex_color(
+                    entity,
+                    self.get_material(wall, visible, world),
+                    material_storage,
+                );
+            }
+        } else {
+            unreachable!();
         }
-        if cell.wall != wall || cell.visible != visible {
-            Self::update_cell_color(
-                cell,
-                self.get_material(wall, visible, world),
-                material_storage,
-            );
-        }
-        cell.wall = wall;
-        cell.visible = visible;
+        hex.wall = wall;
+        hex.visible = visible;
     }
 
-    fn update_cell_transform(
-        cell: &mut Cell,
-        scale: CellScale,
+    fn update_hex_transform(
+        entity: Entity,
+        scale: HexScale,
         transform_storage: &mut WriteStorage<Transform>,
     ) {
         let transform = transform_storage
-            .get_mut(cell.entity)
-            .expect("A cell always has a Transform");
+            .get_mut(entity)
+            .expect("An hex always has a Transform");
         transform.set_scale(Vector3::new(
             scale.horizontal,
             scale.vertical,
@@ -143,178 +164,98 @@ impl TileRenderer {
         transform.translation_mut()[1] = scale.vertical;
     }
 
-    fn update_cell_color(
-        cell: &mut Cell,
+    fn update_hex_color(
+        entity: Entity,
         material: Handle<Material>,
         material_storage: &mut WriteStorage<Handle<Material>>,
     ) {
         *material_storage
-            .get_mut(cell.entity)
-            .expect("A cell always has a Material") = material;
+            .get_mut(entity)
+            .expect("An hex always has a Material") = material;
     }
 }
 
 impl HexRenderer for TileRenderer {
-    fn insert_cell(
-        &mut self,
-        position: AxialVector,
-        wall: bool,
-        visible: bool,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-    ) {
-        match self.world.borrow_mut().entry(position) {
-            Entry::Vacant(entry) => {
-                entry.insert(Cell {
-                    entity: Self::create_hex(
-                        position,
-                        self.get_scale(wall, self.cell_radius),
-                        self.get_material(wall, visible, world),
-                        data,
-                        world,
-                    ),
-                    wall,
-                    visible,
-                });
-            }
-            Entry::Occupied(mut entry) => {
-                let mut transform_storage = data.world.write_storage::<Transform>();
-                let mut material_storage = data.world.write_storage::<Handle<Material>>();
-                self.update_cell_internal(
-                    entry.get_mut(),
-                    wall,
-                    visible,
-                    self.get_scale(wall, self.cell_radius),
-                    world,
-                    &mut transform_storage,
-                    &mut material_storage,
-                );
-            }
+    type Hex = Hex;
+
+    fn new_hex(&mut self, wall: bool, visible: bool) -> Self::Hex {
+        Hex {
+            entity: None,
+            wall,
+            visible,
         }
     }
 
-    fn update_cell(
-        &mut self,
-        position: AxialVector,
-        wall: bool,
-        visible: bool,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-    ) {
-        self.world.borrow_mut().entry(position).and_modify(|cell| {
-            let mut transform_storage = data.world.write_storage::<Transform>();
-            let mut material_storage = data.world.write_storage::<Handle<Material>>();
-            self.update_cell_internal(
-                cell,
-                wall,
-                visible,
-                self.get_scale(wall, self.cell_radius),
-                world,
-                &mut transform_storage,
-                &mut material_storage,
-            )
-        });
+    fn set_cell_radius(&mut self, cell_radius: usize) {
+        self.cell_radius = cell_radius;
     }
 
-    fn set_cell_radius(&mut self, cell_radius: usize, data: &mut StateData<'_, GameData<'_, '_>>) {
-        if self.cell_radius != cell_radius {
-            let mut tile_world = self.world.borrow_mut();
-            if tile_world.is_empty() {
-                self.cell_radius = cell_radius;
-                return;
-            }
-            let mut transform_storage = data.world.write_storage::<Transform>();
-            let ground_scale = self.get_scale(false, cell_radius);
-            let wall_scale = self.get_scale(true, cell_radius);
-            for cell in tile_world.values_mut() {
-                if !cell.wall {
-                    Self::update_cell_transform(cell, ground_scale, &mut transform_storage);
-                }
-                if cell.wall {
-                    Self::update_cell_transform(cell, wall_scale, &mut transform_storage);
-                }
-            }
-            self.cell_radius = cell_radius;
-        }
-    }
-
-    fn update_world<'a, C, I, Wall, Visible>(
+    fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
-        cells: I,
-        is_wall_cell: Wall,
-        is_visible_cell: Visible,
+        hexes: &mut RectHashStorage<StorageHex>,
+        is_wall_hex: Wall,
+        is_visible_hex: Visible,
+        get_renderer_hex: MapHex,
+        visible_only: bool,
+        force: bool,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) where
-        C: 'a,
-        I: Iterator<Item = (&'a AxialVector, &'a C)>,
-        Wall: Fn(AxialVector, &C) -> bool,
-        Visible: Fn(AxialVector, &C) -> bool,
+        StorageHex: 'a + Dispose,
+        MapHex: Fn(&mut StorageHex) -> &mut Self::Hex,
+        Wall: Fn(AxialVector, &StorageHex) -> bool,
+        Visible: Fn(AxialVector, &StorageHex) -> bool,
     {
         let ground_scale = self.get_scale(false, self.cell_radius);
         let wall_scale = self.get_scale(true, self.cell_radius);
-        let mut to_remove = Vec::new();
-        let mut to_insert = Vec::new();
-        let mut tile_world = self.world.borrow_mut();
         {
             let mut transform_storage = data.world.write_storage::<Transform>();
             let mut material_storage = data.world.write_storage::<Handle<Material>>();
-            for joint in tile_world
-                .iter_mut()
-                .merge_join_by(cells, |left, right| left.0.cmp(right.0))
-            {
-                match joint {
-                    EitherOrBoth::Both(left, right) => {
-                        let wall = is_wall_cell(*right.0, right.1);
-                        let visible = is_visible_cell(*right.0, right.1);
-                        self.update_cell_internal(
-                            left.1,
+            for (pos, hex) in hexes.iter_mut() {
+                let wall = is_wall_hex(pos, hex);
+                let visible = is_visible_hex(pos, hex);
+                let renderer_hex = get_renderer_hex(hex);
+                if !visible_only || visible {
+                    if renderer_hex.entity.is_some() {
+                        self.update_hex_internal(
+                            renderer_hex,
                             wall,
                             visible,
                             if wall { wall_scale } else { ground_scale },
+                            force,
                             world,
                             &mut transform_storage,
                             &mut material_storage,
                         );
                     }
-                    EitherOrBoth::Left(left) => to_remove.push(*left.0),
-                    EitherOrBoth::Right(right) => {
-                        let wall = is_wall_cell(*right.0, right.1);
-                        let visible = is_visible_cell(*right.0, right.1);
-                        to_insert.push((*right.0, wall, visible));
+                }
+            }
+        }
+        {
+            for (pos, hex) in hexes.iter_mut() {
+                let wall = is_wall_hex(pos, hex);
+                let visible = is_visible_hex(pos, hex);
+                let renderer_hex = get_renderer_hex(hex);
+                if !visible_only || visible {
+                    if renderer_hex.entity.is_none() {
+                        renderer_hex.entity = Some(Self::create_hex(
+                            pos,
+                            if wall { wall_scale } else { ground_scale },
+                            self.get_material(wall, visible, world),
+                            data,
+                            world,
+                        ));
+                        renderer_hex.wall = wall;
+                        renderer_hex.visible = visible;
+                    }
+                } else {
+                    if let Some(entity) = renderer_hex.entity.take() {
+                        data.world.delete_entity(entity).expect("delete entity");
                     }
                 }
             }
         }
-        for position in to_remove {
-            if let Some(removed) = tile_world.remove(&position) {
-                removed.delete_entity(data);
-            }
-        }
-        for (position, wall, visible) in to_insert {
-            let vacant = tile_world.insert(
-                position,
-                Cell {
-                    entity: Self::create_hex(
-                        position,
-                        if wall { wall_scale } else { ground_scale },
-                        self.get_material(wall, visible, world),
-                        data,
-                        world,
-                    ),
-                    wall,
-                    visible,
-                },
-            );
-            debug_assert!(vacant.is_none());
-        }
     }
 
-    fn clear(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        let mut tile_world = BTreeMap::new();
-        std::mem::swap(&mut *self.world.borrow_mut(), &mut tile_world);
-        for (_, cell) in tile_world {
-            cell.delete_entity(data);
-        }
-    }
+    fn clear(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
 }

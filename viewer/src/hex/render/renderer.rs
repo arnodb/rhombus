@@ -1,43 +1,29 @@
-use crate::world::RhombusViewerWorld;
+use crate::{dispose::Dispose, world::RhombusViewerWorld};
 use amethyst::prelude::*;
-use rhombus_core::hex::coordinates::axial::AxialVector;
+use rhombus_core::hex::{coordinates::axial::AxialVector, storage::hash::RectHashStorage};
 
 pub trait HexRenderer {
-    fn insert_cell(
-        &mut self,
-        position: AxialVector,
-        wall: bool,
-        visible: bool,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-    );
+    type Hex: Dispose;
 
-    fn update_cell(
-        &mut self,
-        position: AxialVector,
-        wall: bool,
-        visible: bool,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-    );
+    fn new_hex(&mut self, wall: bool, visible: bool) -> Self::Hex;
 
-    fn set_cell_radius(&mut self, cell_radius: usize, data: &mut StateData<'_, GameData<'_, '_>>);
+    fn set_cell_radius(&mut self, cell_radius: usize);
 
-    fn update_world<'a, C, I, Wall, Visible>(
+    fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
-        cells: I,
-        is_wall_cell: Wall,
-        is_visible_cell: Visible,
+        hexes: &mut RectHashStorage<StorageHex>,
+        is_wall_hex: Wall,
+        is_visible_hex: Visible,
+        get_renderer_hex: MapHex,
+        visible_only: bool,
+        force: bool,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) where
-        C: 'a,
-        I: Iterator<Item = (&'a AxialVector, &'a C)>,
-        Wall: Fn(AxialVector, &C) -> bool,
-        Visible: Fn(AxialVector, &C) -> bool;
-
-    fn update(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>, _world: &RhombusViewerWorld) {
-    }
+        StorageHex: 'a + Dispose,
+        MapHex: Fn(&mut StorageHex) -> &mut Self::Hex,
+        Wall: Fn(AxialVector, &StorageHex) -> bool,
+        Visible: Fn(AxialVector, &StorageHex) -> bool;
 
     fn clear(&mut self, data: &mut StateData<'_, GameData<'_, '_>>);
 }

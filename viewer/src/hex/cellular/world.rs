@@ -1,11 +1,12 @@
 use crate::{
+    dispose::Dispose,
     hex::{
         pointer::HexPointer,
         render::{
             area::AreaRenderer,
             edge::EdgeRenderer,
             renderer::HexRenderer,
-            tile::{CellScale, TileRenderer},
+            tile::{HexScale, TileRenderer},
         },
     },
     world::RhombusViewerWorld,
@@ -15,11 +16,9 @@ use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
     coordinates::{axial::AxialVector, direction::HexagonalDirection},
     field_of_view::FieldOfView,
+    storage::hash::RectHashStorage,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 const HEX_SCALE_HORIZONTAL: f32 = 0.8;
 const GROUND_HEX_SCALE_VERTICAL: f32 = 0.1;
@@ -27,11 +26,11 @@ const WALL_HEX_SCALE_VERTICAL: f32 = 1.0;
 
 pub fn new_tile_renderer() -> TileRenderer {
     TileRenderer::new(
-        CellScale {
+        HexScale {
             horizontal: HEX_SCALE_HORIZONTAL,
             vertical: GROUND_HEX_SCALE_VERTICAL,
         },
-        CellScale {
+        HexScale {
             horizontal: HEX_SCALE_HORIZONTAL,
             vertical: WALL_HEX_SCALE_VERTICAL,
         },
@@ -59,6 +58,10 @@ pub struct HexData {
     automaton_count: u8,
 }
 
+impl Dispose for HexData {
+    fn dispose(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FovState {
     Partial,
@@ -76,7 +79,7 @@ pub enum MoveMode {
 }
 
 pub struct World<R: HexRenderer> {
-    world: BTreeMap<AxialVector, HexData>,
+    hexes: RectHashStorage<(HexData, R::Hex)>,
     renderer: R,
     renderer_dirty: bool,
     pointer: Option<(HexPointer, FovState)>,
@@ -84,9 +87,8 @@ pub struct World<R: HexRenderer> {
 
 impl<R: HexRenderer> World<R> {
     pub fn new(renderer: R) -> Self {
-        let world = BTreeMap::new();
         Self {
-            world,
+            hexes: RectHashStorage::new(),
             renderer,
             renderer_dirty: false,
             pointer: None,
@@ -102,37 +104,41 @@ impl<R: HexRenderer> World<R> {
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
-        self.renderer.set_cell_radius(cell_radius, data);
+        self.renderer.set_cell_radius(cell_radius);
         let mut rng = thread_rng();
         for r in 0..radius {
-            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
+            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
                 let wall = ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
-                self.world.insert(
-                    cell,
-                    if wall {
-                        HexData {
-                            state: HexState::Wall,
-                            automaton_count: 0,
-                        }
-                    } else {
-                        HexData {
-                            state: HexState::Open,
-                            automaton_count: 0,
-                        }
-                    },
+                self.hexes.insert(
+                    pos,
+                    (
+                        if wall {
+                            HexData {
+                                state: HexState::Wall,
+                                automaton_count: 0,
+                            }
+                        } else {
+                            HexData {
+                                state: HexState::Open,
+                                automaton_count: 0,
+                            }
+                        },
+                        self.renderer.new_hex(wall, true),
+                    ),
                 );
-                self.renderer.insert_cell(cell, wall, true, data, &world);
             }
         }
-        for cell in AxialVector::default().big_ring_iter(cell_radius, radius) {
-            self.world.insert(
-                cell,
-                HexData {
-                    state: HexState::HardWall,
-                    automaton_count: 0,
-                },
+        for pos in AxialVector::default().big_ring_iter(cell_radius, radius) {
+            self.hexes.insert(
+                pos,
+                (
+                    HexData {
+                        state: HexState::HardWall,
+                        automaton_count: 0,
+                    },
+                    self.renderer.new_hex(true, true),
+                ),
             );
-            self.renderer.insert_cell(cell, true, true, data, &world);
         }
     }
 
@@ -143,7 +149,7 @@ impl<R: HexRenderer> World<R> {
     ) {
         self.delete_pointer(data, world);
         self.renderer.clear(data);
-        self.world.clear();
+        self.hexes.dispose(data);
     }
 
     fn delete_pointer(
@@ -157,19 +163,19 @@ impl<R: HexRenderer> World<R> {
     }
 
     pub fn cellular_automaton_phase1_step1(&mut self, radius: usize, cell_radius: usize) {
-        for hex_data in self.world.values_mut() {
+        for (hex_data, _) in self.hexes.hexes_mut() {
             hex_data.automaton_count = 0;
         }
         for r in 0..=radius {
-            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
-                let hex_state = self.world.get(&cell).unwrap().state;
+            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
+                let hex_state = self.hexes.get(pos).unwrap().0.state;
                 let is_wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
                     HexState::Open => false,
                 };
                 if is_wall {
-                    for neighbor in cell.big_ring_iter(cell_radius, 1) {
-                        if let Some(hex_data) = self.world.get_mut(&neighbor) {
+                    for neighbor in pos.big_ring_iter(cell_radius, 1) {
+                        if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
                             hex_data.automaton_count += 1;
                         }
                     }
@@ -179,19 +185,19 @@ impl<R: HexRenderer> World<R> {
     }
 
     pub fn cellular_automaton_phase2_step1(&mut self) {
-        for hex_data in self.world.values_mut() {
+        for (hex_data, _) in self.hexes.hexes_mut() {
             hex_data.automaton_count = 0;
         }
-        let keys = self.world.keys().cloned().collect::<Vec<_>>();
-        for cell in keys {
-            let hex_state = self.world.get(&cell).unwrap().state;
+        let positions = self.hexes.positions().collect::<Vec<_>>();
+        for pos in positions {
+            let hex_state = self.hexes.get(pos).unwrap().0.state;
             let is_wall = match hex_state {
                 HexState::Wall | HexState::HardWall => true,
                 HexState::Open => false,
             };
             if is_wall {
-                for neighbor in cell.ring_iter(1) {
-                    if let Some(hex_data) = self.world.get_mut(&neighbor) {
+                for neighbor in pos.ring_iter(1) {
+                    if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
                         hex_data.automaton_count += 1;
                     }
                 }
@@ -203,26 +209,22 @@ impl<R: HexRenderer> World<R> {
         &mut self,
         raise_wall_test: RaiseF,
         remain_wall_test: RemainF,
-        data: &mut StateData<'_, GameData<'_, '_>>,
     ) -> bool
     where
         RaiseF: Fn(u8) -> bool,
         RemainF: Fn(u8) -> bool,
     {
-        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         let mut frozen = true;
-        for (pos, hex_data) in &mut self.world {
+        for (hex_data, _) in self.hexes.hexes_mut() {
             match hex_data.state {
                 HexState::Wall => {
                     if !remain_wall_test(hex_data.automaton_count) {
-                        self.renderer.update_cell(*pos, false, true, data, &world);
                         hex_data.state = HexState::Open;
                         frozen = false;
                     }
                 }
                 HexState::Open => {
                     if raise_wall_test(hex_data.automaton_count) {
-                        self.renderer.update_cell(*pos, true, true, data, &world);
                         hex_data.state = HexState::Wall;
                         frozen = false;
                     }
@@ -230,55 +232,55 @@ impl<R: HexRenderer> World<R> {
                 HexState::HardWall => {}
             }
         }
+        if !frozen {
+            self.renderer_dirty = true;
+        }
         frozen
     }
 
-    pub fn expand(
-        &mut self,
-        radius: usize,
-        cell_radius: usize,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-    ) {
+    pub fn expand(&mut self, radius: usize, cell_radius: usize) {
         if cell_radius <= 0 {
             return;
         }
-        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        self.renderer.set_cell_radius(0, data);
+        self.renderer.set_cell_radius(0);
         for r in 0..=radius {
-            for cell in AxialVector::default().big_ring_iter(cell_radius, r) {
+            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
                 let HexData {
                     state: hex_state, ..
-                } = *self.world.get(&cell).unwrap();
+                } = self.hexes.get(pos).unwrap().0;
                 let wall = match hex_state {
                     HexState::Wall | HexState::HardWall => true,
                     HexState::Open => false,
                 };
                 for s in 1..=cell_radius {
-                    for sub_pos in cell.ring_iter(s) {
-                        self.world.insert(
+                    for sub_pos in pos.ring_iter(s) {
+                        self.hexes.insert(
                             sub_pos,
-                            HexData {
-                                state: hex_state,
-                                automaton_count: 0,
-                            },
+                            (
+                                HexData {
+                                    state: hex_state,
+                                    automaton_count: 0,
+                                },
+                                self.renderer.new_hex(wall, true),
+                            ),
                         );
-                        self.renderer.insert_cell(sub_pos, wall, true, data, &world);
                     }
                 }
             }
         }
+        self.renderer_dirty = true;
     }
 
-    fn find_open_cell(&self) -> Option<AxialVector> {
+    fn find_open_hex(&self) -> Option<AxialVector> {
         let mut r = 0;
         loop {
-            for cell in AxialVector::default().ring_iter(r) {
-                let cell_data = self.world.get(&cell);
-                match cell_data {
+            for pos in AxialVector::default().ring_iter(r) {
+                let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
+                match hex_data {
                     Some(HexData {
                         state: HexState::Open,
                         ..
-                    }) => return Some(cell),
+                    }) => return Some(pos),
                     Some(..) => (),
                     None => return None,
                 }
@@ -295,9 +297,9 @@ impl<R: HexRenderer> World<R> {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.delete_pointer(data, &world);
 
-        if let Some(cell) = self.find_open_cell() {
+        if let Some(hex) = self.find_open_hex() {
             let mut pointer = HexPointer::new_with_level_height(1.0);
-            pointer.set_position(cell, 0, data, &world);
+            pointer.set_position(hex, 0, data, &world);
             pointer.create_entities(data, &world);
             self.pointer = Some((pointer, fov_state));
             self.renderer_dirty = true;
@@ -332,7 +334,7 @@ impl<R: HexRenderer> World<R> {
             if let Some(HexData {
                 state: HexState::Open,
                 ..
-            }) = self.world.get(&next)
+            }) = self.hexes.get(next).map(|hex| &hex.0)
             {
                 let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                 pointer.set_position(next, 0, data, &world);
@@ -348,84 +350,80 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn update_renderer_world(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn update_renderer_world(
+        &mut self,
+        force: bool,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+    ) {
         if !self.renderer_dirty {
             return;
         }
 
-        let (pointer, fov_state) = if let Some((pointer, fov_state)) = &self.pointer {
-            (pointer, *fov_state)
-        } else {
-            return;
-        };
-
-        let mut visible_positions = BTreeSet::new();
-        visible_positions.insert(pointer.position());
-        let mut fov = FieldOfView::default();
-        fov.start(pointer.position());
-        let is_obstacle = |pos| {
-            let hex_data = self.world.get(&pos);
-            match hex_data {
-                Some(HexData {
-                    state: HexState::Open,
-                    ..
-                }) => false,
-                Some(HexData {
-                    state: HexState::Wall,
-                    ..
-                })
-                | Some(HexData {
-                    state: HexState::HardWall,
-                    ..
-                }) => true,
-                None => false,
-            }
-        };
-        loop {
-            let prev_len = visible_positions.len();
-            for pos in fov.iter() {
-                let key = pointer.position() + pos;
-                if self.world.contains_key(&key) {
-                    let inserted = visible_positions.insert(key);
-                    debug_assert!(inserted);
+        let (visible_positions, visible_only) = if let Some((pointer, fov_state)) = &self.pointer {
+            let mut visible_positions = HashSet::new();
+            visible_positions.insert(pointer.position());
+            let mut fov = FieldOfView::default();
+            fov.start(pointer.position());
+            let is_obstacle = |pos| {
+                let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
+                match hex_data {
+                    Some(HexData {
+                        state: HexState::Open,
+                        ..
+                    }) => false,
+                    Some(HexData {
+                        state: HexState::Wall,
+                        ..
+                    })
+                    | Some(HexData {
+                        state: HexState::HardWall,
+                        ..
+                    }) => true,
+                    None => false,
                 }
+            };
+            loop {
+                let prev_len = visible_positions.len();
+                for pos in fov.iter() {
+                    let key = pointer.position() + pos;
+                    if self.hexes.contains_position(key) {
+                        let inserted = visible_positions.insert(key);
+                        debug_assert!(inserted);
+                    }
+                }
+                if visible_positions.len() == prev_len {
+                    break;
+                }
+                fov.next_radius(&is_obstacle);
             }
-            if visible_positions.len() == prev_len {
-                break;
-            }
-            fov.next_radius(&is_obstacle);
-        }
+            (
+                Some(visible_positions),
+                match fov_state {
+                    FovState::Partial => false,
+                    FovState::Full => true,
+                },
+            )
+        } else {
+            (None, false)
+        };
 
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
 
-        match fov_state {
-            FovState::Partial => {
-                self.renderer.update_world(
-                    self.world.iter(),
-                    |_, hex_data| hex_data.state != HexState::Open,
-                    |pos, _| visible_positions.contains(&pos),
-                    data,
-                    &world,
-                );
-            }
-            FovState::Full => {
-                self.renderer.update_world(
-                    self.world
-                        .iter()
-                        .filter(|(pos, _)| visible_positions.contains(pos)),
-                    |_, hex_data| hex_data.state != HexState::Open,
-                    |_, _| true,
-                    data,
-                    &world,
-                );
-            }
-        }
+        self.renderer.update_world(
+            &mut self.hexes,
+            |_, hex| hex.0.state != HexState::Open,
+            |pos, _| {
+                visible_positions
+                    .as_ref()
+                    .map_or(true, |vp| vp.contains(&pos))
+            },
+            |hex| &mut hex.1,
+            visible_only,
+            force,
+            data,
+            &world,
+        );
 
         self.renderer_dirty = false;
-    }
-
-    pub fn update_renderer(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
-        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-        self.renderer.update(data, &world);
     }
 }

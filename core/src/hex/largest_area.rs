@@ -1,12 +1,12 @@
-use crate::hex::coordinates::axial::AxialVector;
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    ops::RangeInclusive,
+use crate::hex::{
+    coordinates::axial::AxialVector,
+    storage::hash::{RectHashEntry, RectHashStorage},
 };
+use std::{collections::BTreeMap, ops::RangeInclusive};
 
 #[derive(Default)]
 pub struct LargestAreaIterator {
-    data: BTreeMap<AxialVector, CellData>,
+    data: RectHashStorage<CellData>,
 }
 
 #[derive(Clone, Copy)]
@@ -28,7 +28,7 @@ impl LargestAreaIterator {
         Option<(RangeInclusive<isize>, RangeInclusive<isize>)>,
     ) {
         let mut largest_area = (0, None);
-        for (pos, cell_data) in &self.data {
+        for (pos, cell_data) in self.data.iter() {
             let mut min_w = cell_data.w;
             if min_w > largest_area.0 {
                 largest_area = (
@@ -39,7 +39,7 @@ impl LargestAreaIterator {
             for dh in 1..cell_data.h {
                 min_w = min_w.min(
                     self.data
-                        .get(&AxialVector::new(pos.q() - dh as isize, pos.r()))
+                        .get(AxialVector::new(pos.q() - dh as isize, pos.r()))
                         .unwrap()
                         .w,
                 );
@@ -58,18 +58,18 @@ impl LargestAreaIterator {
         if let Some((range_q, range_r)) = &largest_area.1 {
             for q in range_q.clone() {
                 for r in range_r.clone() {
-                    self.data.remove(&AxialVector::new(q, r));
+                    self.data.remove(AxialVector::new(q, r));
                 }
                 let mut r = range_r.end() + 1;
                 let mut w = 1;
                 loop {
                     match self.data.entry(AxialVector::new(q, r)) {
-                        Entry::Occupied(mut cell_data) => {
+                        RectHashEntry::Occupied(mut cell_data) => {
                             cell_data.get_mut().w = w;
                             r += 1;
                             w += 1
                         }
-                        Entry::Vacant(..) => {
+                        RectHashEntry::Vacant(..) => {
                             break;
                         }
                     }
@@ -80,12 +80,12 @@ impl LargestAreaIterator {
                 let mut h = 1;
                 loop {
                     match self.data.entry(AxialVector::new(q, r)) {
-                        Entry::Occupied(mut cell_data) => {
+                        RectHashEntry::Occupied(mut cell_data) => {
                             cell_data.get_mut().h = h;
                             q += 1;
                             h += 1
                         }
-                        Entry::Vacant(..) => {
+                        RectHashEntry::Vacant(..) => {
                             break;
                         }
                     }

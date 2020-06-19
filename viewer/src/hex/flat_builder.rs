@@ -3,7 +3,7 @@ use crate::{
         pointer::HexPointer,
         render::{
             renderer::HexRenderer,
-            tile::{CellScale, TileRenderer},
+            tile::{HexScale, TileRenderer},
         },
     },
     world::RhombusViewerWorld,
@@ -14,8 +14,11 @@ use amethyst::{
     prelude::*,
     winit::VirtualKeyCode,
 };
-use rhombus_core::hex::coordinates::{axial::AxialVector, direction::HexagonalDirection};
-use std::{collections::BTreeMap, sync::Arc};
+use rhombus_core::hex::{
+    coordinates::{axial::AxialVector, direction::HexagonalDirection},
+    storage::hash::RectHashStorage,
+};
+use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum HexState {
@@ -28,20 +31,20 @@ struct HexData {
 }
 
 pub struct HexFlatBuilderDemo {
-    world: BTreeMap<AxialVector, HexData>,
+    world: RectHashStorage<(HexData, <TileRenderer as HexRenderer>::Hex)>,
     renderer: TileRenderer,
     pointer: HexPointer,
 }
 
 impl HexFlatBuilderDemo {
     pub fn new() -> Self {
-        let world = BTreeMap::new();
+        let world = RectHashStorage::new();
         let renderer = TileRenderer::new(
-            CellScale {
+            HexScale {
                 horizontal: 0.8,
                 vertical: 0.1,
             },
-            CellScale {
+            HexScale {
                 horizontal: 0.8,
                 vertical: 0.3,
             },
@@ -55,19 +58,23 @@ impl HexFlatBuilderDemo {
         }
     }
 
-    fn raise_wall(
-        &mut self,
-        position: AxialVector,
-        data: &mut StateData<'_, GameData<'_, '_>>,
-        world: &RhombusViewerWorld,
-    ) {
+    fn raise_wall(&mut self, position: AxialVector, data: &mut StateData<'_, GameData<'_, '_>>) {
         self.world.insert(
             position,
-            HexData {
-                state: HexState::Wall,
-            },
+            (
+                HexData {
+                    state: HexState::Wall,
+                },
+                self.renderer.new_hex(true, true),
+            ),
         );
-        self.renderer.insert_cell(position, true, true, data, world);
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+        self.renderer.update_hex(
+            position,
+            &mut self.world.get_mut(position).unwrap().1,
+            data,
+            &world,
+        );
     }
 }
 
@@ -77,12 +84,19 @@ impl SimpleState for HexFlatBuilderDemo {
         self.pointer.create_entities(&mut data, &world);
         self.world.insert(
             self.pointer.position(),
-            HexData {
-                state: HexState::Open,
-            },
+            (
+                HexData {
+                    state: HexState::Open,
+                },
+                self.renderer.new_hex(false, true),
+            ),
         );
-        self.renderer
-            .insert_cell(self.pointer.position(), false, true, &mut data, &world);
+        self.renderer.update_hex(
+            self.pointer.position(),
+            &mut self.world.get_mut(self.pointer.position()).unwrap().1,
+            &mut data,
+            &world,
+        );
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
@@ -113,17 +127,30 @@ impl SimpleState for HexFlatBuilderDemo {
                 Some((VirtualKeyCode::Up, ElementState::Pressed)) => {
                     let next = self.pointer.position().neighbor(self.pointer.direction());
                     let mut new = false;
-                    let next_state = self.world.entry(next).or_insert_with(|| {
-                        new = true;
+                    let new_hex = (
                         HexData {
                             state: HexState::Open,
-                        }
-                    });
+                        },
+                        self.renderer.new_hex(false, true),
+                    );
+                    let next_state = self
+                        .world
+                        .entry(next)
+                        .or_insert_with(|| {
+                            new = true;
+                            new_hex
+                        })
+                        .0
+                        .state;
                     if new {
-                        self.renderer
-                            .insert_cell(next, false, true, &mut data, &world);
+                        self.renderer.update_hex(
+                            next,
+                            &mut self.world.get_mut(next).unwrap().1,
+                            &mut data,
+                            &world,
+                        );
                     }
-                    match next_state.state {
+                    match next_state {
                         HexState::Open => {
                             if new {
                                 // Left
@@ -132,7 +159,6 @@ impl SimpleState for HexFlatBuilderDemo {
                                         .position()
                                         .neighbor((self.pointer.direction() + 1) % 6),
                                     &mut data,
-                                    &world,
                                 );
                                 // Right
                                 self.raise_wall(
@@ -140,23 +166,22 @@ impl SimpleState for HexFlatBuilderDemo {
                                         .position()
                                         .neighbor((self.pointer.direction() + 5) % 6),
                                     &mut data,
-                                    &world,
                                 );
                                 // Ahead
                                 let ahead_left = next.neighbor((self.pointer.direction() + 1) % 6);
                                 let ahead = next.neighbor(self.pointer.direction());
                                 let ahead_right = next.neighbor((self.pointer.direction() + 5) % 6);
                                 match (
-                                    self.world.get(&ahead_left).map(|h| h.state),
-                                    self.world.get(&ahead).map(|h| h.state),
-                                    self.world.get(&ahead_right).map(|h| h.state),
+                                    self.world.get(ahead_left).map(|h| h.0.state),
+                                    self.world.get(ahead).map(|h| h.0.state),
+                                    self.world.get(ahead_right).map(|h| h.0.state),
                                 ) {
                                     (Some(HexState::Open), _, _) | (_, _, Some(HexState::Open)) => {
-                                        self.raise_wall(ahead, &mut data, &world);
+                                        self.raise_wall(ahead, &mut data);
                                     }
                                     (_, Some(HexState::Open), _) => {
-                                        self.raise_wall(ahead_left, &mut data, &world);
-                                        self.raise_wall(ahead_right, &mut data, &world);
+                                        self.raise_wall(ahead_left, &mut data);
+                                        self.raise_wall(ahead_right, &mut data);
                                     }
                                     _ => {}
                                 }

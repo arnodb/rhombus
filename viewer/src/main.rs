@@ -4,6 +4,7 @@ extern crate derive_more;
 extern crate derive_new;
 
 pub mod assets;
+pub mod dispose;
 pub mod dodec;
 pub mod hex;
 pub mod input;
@@ -486,7 +487,7 @@ fn main() -> amethyst::Result<()> {
             RenderingBundle::<DefaultBackend>::new()
                 .with_plugin(
                     RenderToWindow::from_config_path(display_config_path)?
-                        .with_clear([0.05, 0.05, 0.05, 1.0]),
+                        .with_clear([0.02, 0.02, 0.02, 1.0]),
                 )
                 .with_plugin(RenderShaded3D::default())
                 .with_plugin(RenderDebugLines::default())
