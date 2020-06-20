@@ -1,4 +1,5 @@
 use crate::{
+    dispose::Dispose,
     hex::{
         pointer::HexPointer,
         render::{
@@ -28,6 +29,10 @@ enum HexState {
 
 struct HexData {
     state: HexState,
+}
+
+impl Dispose for HexData {
+    fn dispose(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
 }
 
 pub struct HexFlatBuilderDemo {
@@ -103,7 +108,7 @@ impl SimpleState for HexFlatBuilderDemo {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer.delete_entities(&mut data, &world);
         self.renderer.clear(&mut data);
-        self.world.clear();
+        self.world.dispose(&mut data);
     }
 
     fn handle_event(
