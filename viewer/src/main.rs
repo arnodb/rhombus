@@ -17,8 +17,8 @@ use crate::{
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
     hex::{
         bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
-        directions::HexDirectionsDemo, flat_builder::HexFlatBuilderDemo, ring::HexRingDemo,
-        snake::HexSnakeDemo,
+        cubic_range_shape::HexCubicRangeShapeDemo, directions::HexDirectionsDemo,
+        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
     },
     systems::{
         camera_distance::CameraDistanceSystemDesc,
@@ -70,6 +70,8 @@ const DEMO_DODEC_DIRECTIONS: usize = 3;
 const DEMO_DODEC_SPHERE: usize = 4;
 const DEMO_DODEC_SNAKE: usize = 5;
 
+const HEX_CUBIC_RANGE_SHAPE: usize = 10;
+
 const HEX_FLAT_BUILDER: usize = 100;
 const HEX_BUMPY_BUILDER: usize = 101;
 const HEX_CELLULAR_BUILDER: usize = 102;
@@ -118,6 +120,8 @@ impl RhombusViewer {
             DEMO_DODEC_DIRECTIONS => Box::new(DodecDirectionsDemo::new()),
             DEMO_DODEC_SPHERE => Box::new(DodecSphereDemo::new()),
             DEMO_DODEC_SNAKE => Box::new(DodecSnakeDemo::new()),
+            // Cubic range shape
+            HEX_CUBIC_RANGE_SHAPE => Box::new(HexCubicRangeShapeDemo::new()),
             // Flat hex builders
             HEX_FLAT_BUILDER => Box::new(HexFlatBuilderDemo::new()),
             // Bumpy hex builders
@@ -439,6 +443,9 @@ enum DemoOption {
     DodecSphere = DEMO_DODEC_SPHERE as isize,
     #[structopt(name = "dodec-snake")]
     DodecSnake = DEMO_DODEC_SNAKE as isize,
+
+    #[structopt(name = "hex-cubic-range-shape")]
+    HexCubicRangeShape = HEX_CUBIC_RANGE_SHAPE as isize,
 
     #[structopt(name = "hex-flat-builder")]
     HexFlatBuilder = HEX_FLAT_BUILDER as isize,

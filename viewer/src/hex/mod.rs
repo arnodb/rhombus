@@ -1,8 +1,10 @@
 pub mod bumpy_builder;
 pub mod cellular;
+pub mod cubic_range_shape;
 pub mod directions;
 pub mod flat_builder;
 pub mod pointer;
 pub mod render;
 pub mod ring;
+pub mod shape;
 pub mod snake;

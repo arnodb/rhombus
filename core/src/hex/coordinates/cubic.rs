@@ -49,7 +49,7 @@ impl CubicVector {
 
     pub fn distance(self, other: Self) -> isize {
         let vector = self - other;
-        (isize::abs(vector.x()) + isize::abs(vector.y()) + isize::abs(vector.z())) / 2
+        (vector.x().abs() + vector.y().abs() + vector.z().abs()) / 2
     }
 
     pub fn ring_iter(&self, radius: usize) -> RingIter<Self> {
