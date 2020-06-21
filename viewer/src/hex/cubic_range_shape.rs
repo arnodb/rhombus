@@ -101,12 +101,9 @@ impl HexCubicRangeShapeDemo {
 
     fn try_resize_shape(
         &mut self,
-        x_start: isize,
-        x_end: isize,
-        y_start: isize,
-        y_end: isize,
-        z_start: isize,
-        z_end: isize,
+        (x_start, x_end): (isize, isize),
+        (y_start, y_end): (isize, isize),
+        (z_start, z_end): (isize, isize),
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) {
@@ -192,72 +189,54 @@ impl SimpleState for HexCubicRangeShapeDemo {
                 }
                 Some((VirtualKeyCode::F, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        if !modifiers.shift { 1 } else { -1 },
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
+                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        (0, 0),
+                        (0, 0),
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::G, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        0,
-                        if !modifiers.shift { 1 } else { -1 },
-                        0,
-                        0,
-                        0,
-                        0,
+                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        (0, 0),
+                        (0, 0),
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::H, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        0,
-                        0,
-                        if !modifiers.shift { 1 } else { -1 },
-                        0,
-                        0,
-                        0,
+                        (0, 0),
+                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        (0, 0),
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::J, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        0,
-                        0,
-                        0,
-                        if !modifiers.shift { 1 } else { -1 },
-                        0,
-                        0,
+                        (0, 0),
+                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        (0, 0),
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::K, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        0,
-                        0,
-                        0,
-                        0,
-                        if !modifiers.shift { 1 } else { -1 },
-                        0,
+                        (0, 0),
+                        (0, 0),
+                        (if modifiers.shift { 1 } else { -1 }, 0),
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::L, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        if !modifiers.shift { 1 } else { -1 },
+                        (0, 0),
+                        (0, 0),
+                        (0, if !modifiers.shift { 1 } else { -1 }),
                         &mut data,
                         &world,
                     );

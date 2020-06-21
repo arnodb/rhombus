@@ -6,6 +6,7 @@ use crate::{
         render::{
             area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
         },
+        shape::cubic_range::CubicRangeShape,
     },
     input::get_key_and_modifiers,
     world::RhombusViewerWorld,
@@ -14,6 +15,9 @@ use amethyst::{
     core::timing::Time, ecs::prelude::*, input::ElementState, prelude::*, winit::VirtualKeyCode,
 };
 use std::sync::Arc;
+
+const CELL_RADIUS_RATIO_DEN: usize = 42;
+const WALL_RATIO: f32 = 0.5;
 
 #[derive(Debug, PartialEq, Eq)]
 enum CellularState {
@@ -25,8 +29,6 @@ enum CellularState {
 
 pub struct HexCellularBuilder<R: HexRenderer> {
     world: World<R>,
-    world_radius: usize,
-    cell_radius: usize,
     remaining_millis: u64,
     state: CellularState,
 }
@@ -35,16 +37,20 @@ impl<R: HexRenderer> HexCellularBuilder<R> {
     fn new(renderer: R) -> Self {
         Self {
             world: World::new(renderer),
-            world_radius: 12,
-            cell_radius: 2,
             remaining_millis: 0,
             state: CellularState::Grown,
         }
     }
 
     fn reset(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        let world_radius = 42;
+        let shape = CubicRangeShape::new(
+            -world_radius..=world_radius,
+            -world_radius..=world_radius,
+            -world_radius..=world_radius,
+        );
         self.world
-            .reset_world(self.world_radius, self.cell_radius, 0.5, data);
+            .reset_world(shape, CELL_RADIUS_RATIO_DEN, WALL_RATIO, data);
         self.state = CellularState::GrowingPhase1;
         self.remaining_millis = 0;
     }
@@ -74,30 +80,16 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                     trans = Trans::Pop;
                 }
                 Some((VirtualKeyCode::N, ElementState::Pressed, _)) => {
-                    self.reset(&mut data);
-                }
-                Some((VirtualKeyCode::Key8, ElementState::Pressed, _)) => {
-                    if self.cell_radius < 12 {
-                        self.cell_radius += 1;
-                        self.reset(&mut data);
-                    }
-                }
-                Some((VirtualKeyCode::Key7, ElementState::Pressed, _)) => {
-                    if self.cell_radius > 0 {
-                        self.cell_radius -= 1;
-                        self.reset(&mut data);
-                    }
-                }
-                Some((VirtualKeyCode::Key0, ElementState::Pressed, _)) => {
-                    if self.world_radius < 42 {
-                        self.world_radius += 1;
-                        self.reset(&mut data);
-                    }
-                }
-                Some((VirtualKeyCode::Key9, ElementState::Pressed, _)) => {
-                    if self.world_radius > 0 {
-                        self.world_radius -= 1;
-                        self.reset(&mut data);
+                    if self.world.try_resize_shape(
+                        (0, 0),
+                        (0, 0),
+                        (0, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
                     }
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed, modifiers)) => {
@@ -132,7 +124,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                     let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
                     world.toggle_follow(&data);
                 }
-                Some((VirtualKeyCode::F, ElementState::Pressed, _)) => {
+                Some((VirtualKeyCode::V, ElementState::Pressed, _)) => {
                     if let CellularState::FieldOfView(mut fov_enabled) = self.state {
                         fov_enabled = !fov_enabled;
                         self.world.change_field_of_view(if fov_enabled {
@@ -141,6 +133,84 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                             FovState::Partial
                         });
                         self.state = CellularState::FieldOfView(fov_enabled);
+                    }
+                }
+                Some((VirtualKeyCode::F, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        (0, 0),
+                        (0, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
+                    }
+                }
+                Some((VirtualKeyCode::G, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        (0, 0),
+                        (0, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
+                    }
+                }
+                Some((VirtualKeyCode::H, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (0, 0),
+                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        (0, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
+                    }
+                }
+                Some((VirtualKeyCode::J, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (0, 0),
+                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        (0, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
+                    }
+                }
+                Some((VirtualKeyCode::K, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (0, 0),
+                        (0, 0),
+                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
+                    }
+                }
+                Some((VirtualKeyCode::L, ElementState::Pressed, modifiers)) => {
+                    if self.world.try_resize_shape(
+                        (0, 0),
+                        (0, 0),
+                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        CELL_RADIUS_RATIO_DEN,
+                        WALL_RATIO,
+                        &mut data,
+                    ) {
+                        self.state = CellularState::GrowingPhase1;
+                        self.remaining_millis = 0;
                     }
                 }
                 _ => {}
@@ -167,14 +237,13 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
         for _ in 0..num {
             match self.state {
                 CellularState::GrowingPhase1 => {
-                    self.world
-                        .cellular_automaton_phase1_step1(self.world_radius, self.cell_radius);
+                    self.world.cellular_automaton_phase1_step1();
                     let frozen = self.world.cellular_automaton_step2(
                         |count| count >= 5 && count <= 6,
                         |count| count >= 3 && count <= 6,
                     );
                     if frozen {
-                        self.world.expand(self.world_radius, self.cell_radius);
+                        self.world.expand(data);
                         force_update = true;
                         self.state = CellularState::GrowingPhase2(2);
                     }
@@ -192,8 +261,8 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                     }
                 }
                 CellularState::Grown => {
-                    self.world.create_pointer(FovState::Full, data);
-                    self.state = CellularState::FieldOfView(true);
+                    self.world.create_pointer(FovState::Partial, data);
+                    self.state = CellularState::FieldOfView(false);
                 }
                 CellularState::FieldOfView(..) => {
                     break;

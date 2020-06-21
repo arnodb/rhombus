@@ -8,13 +8,14 @@ use crate::{
             renderer::HexRenderer,
             tile::{HexScale, TileRenderer},
         },
+        shape::cubic_range::CubicRangeShape,
     },
     world::RhombusViewerWorld,
 };
 use amethyst::{ecs::prelude::*, prelude::*};
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
-    coordinates::{axial::AxialVector, direction::HexagonalDirection},
+    coordinates::{axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection},
     field_of_view::FieldOfView,
     storage::hash::RectHashStorage,
 };
@@ -79,6 +80,8 @@ pub enum MoveMode {
 }
 
 pub struct World<R: HexRenderer> {
+    shape: CubicRangeShape,
+    cell_radius: usize,
     hexes: RectHashStorage<(HexData, R::Hex)>,
     renderer: R,
     renderer_dirty: bool,
@@ -88,6 +91,8 @@ pub struct World<R: HexRenderer> {
 impl<R: HexRenderer> World<R> {
     pub fn new(renderer: R) -> Self {
         Self {
+            shape: CubicRangeShape::default(),
+            cell_radius: 1,
             hexes: RectHashStorage::new(),
             renderer,
             renderer_dirty: false,
@@ -97,49 +102,99 @@ impl<R: HexRenderer> World<R> {
 
     pub fn reset_world(
         &mut self,
-        radius: usize,
-        cell_radius: usize,
+        shape: CubicRangeShape,
+        cell_radius_ratio_den: usize,
         wall_ratio: f32,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
-        self.renderer.set_cell_radius(cell_radius);
+        self.shape = shape;
+        self.cell_radius = Self::compute_cell_radius(&self.shape, cell_radius_ratio_den);
+        self.renderer.set_cell_radius(self.cell_radius);
         let mut rng = thread_rng();
-        for r in 0..radius {
-            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
-                let wall = ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio;
+        let internal_ranges = [
+            self.shape.range_x().start() + 1 + self.cell_radius as isize
+                ..=self.shape.range_x().end() - 1 - self.cell_radius as isize,
+            self.shape.range_y().start() + 1 + self.cell_radius as isize
+                ..=self.shape.range_y().end() - 1 - self.cell_radius as isize,
+            self.shape.range_z().start() + 1 + self.cell_radius as isize
+                ..=self.shape.range_z().end() - 1 - self.cell_radius as isize,
+        ];
+        let mut r = 0;
+        loop {
+            let mut end = true;
+            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
+                if !pos
+                    .ring_iter(self.cell_radius)
+                    .any(|v| self.shape.contains(v))
+                {
+                    continue;
+                }
+                end = false;
+                let cubic = CubicVector::from(pos);
+                let state = if internal_ranges[0].contains(&cubic.x())
+                    && internal_ranges[1].contains(&cubic.y())
+                    && internal_ranges[2].contains(&cubic.z())
+                {
+                    if ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio {
+                        HexState::Wall
+                    } else {
+                        HexState::Open
+                    }
+                } else {
+                    HexState::HardWall
+                };
                 self.hexes.insert(
                     pos,
                     (
-                        if wall {
-                            HexData {
-                                state: HexState::Wall,
-                                automaton_count: 0,
-                            }
-                        } else {
-                            HexData {
-                                state: HexState::Open,
-                                automaton_count: 0,
-                            }
+                        HexData {
+                            state,
+                            automaton_count: 0,
                         },
-                        self.renderer.new_hex(wall, true),
+                        self.renderer.new_hex(state != HexState::Open, true),
                     ),
                 );
             }
+            if end {
+                break;
+            }
+            r += 1;
         }
-        for pos in AxialVector::default().big_ring_iter(cell_radius, radius) {
-            self.hexes.insert(
-                pos,
-                (
-                    HexData {
-                        state: HexState::HardWall,
-                        automaton_count: 0,
-                    },
-                    self.renderer.new_hex(true, true),
-                ),
-            );
+    }
+
+    pub fn try_resize_shape(
+        &mut self,
+        (x_start, x_end): (isize, isize),
+        (y_start, y_end): (isize, isize),
+        (z_start, z_end): (isize, isize),
+        cell_radius_ratio_den: usize,
+        wall_ratio: f32,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+    ) -> bool {
+        let range_x = self.shape.range_x();
+        let range_x = *range_x.start() + x_start..=*range_x.end() + x_end;
+        let range_y = self.shape.range_y();
+        let range_y = *range_y.start() + y_start..=*range_y.end() + y_end;
+        let range_z = self.shape.range_z();
+        let range_z = *range_z.start() + z_start..=*range_z.end() + z_end;
+        if CubicRangeShape::are_ranges_valid(&range_x, &range_y, &range_z) {
+            let shape = CubicRangeShape::new(range_x, range_y, range_z);
+            self.reset_world(shape, cell_radius_ratio_den, wall_ratio, data);
+            true
+        } else {
+            false
         }
+    }
+
+    fn compute_cell_radius(shape: &CubicRangeShape, cell_radius_ratio_den: usize) -> usize {
+        let mut deltas = [
+            shape.range_x().end() - shape.range_x().start(),
+            shape.range_y().end() - shape.range_y().start(),
+            shape.range_z().end() - shape.range_z().start(),
+        ];
+        deltas.sort();
+        deltas[1] as usize / cell_radius_ratio_den
     }
 
     pub fn clear(
@@ -162,25 +217,39 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn cellular_automaton_phase1_step1(&mut self, radius: usize, cell_radius: usize) {
+    pub fn cellular_automaton_phase1_step1(&mut self) {
         for (hex_data, _) in self.hexes.hexes_mut() {
             hex_data.automaton_count = 0;
         }
-        for r in 0..=radius {
-            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
-                let hex_state = self.hexes.get(pos).unwrap().0.state;
-                let is_wall = match hex_state {
-                    HexState::Wall | HexState::HardWall => true,
-                    HexState::Open => false,
-                };
-                if is_wall {
-                    for neighbor in pos.big_ring_iter(cell_radius, 1) {
-                        if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
-                            hex_data.automaton_count += 1;
+        let mut r = 0;
+        loop {
+            let mut end = true;
+            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
+                if let Some((
+                    HexData {
+                        state: hex_state, ..
+                    },
+                    _,
+                )) = self.hexes.get(pos)
+                {
+                    let is_wall = match hex_state {
+                        HexState::Wall | HexState::HardWall => true,
+                        HexState::Open => false,
+                    };
+                    if is_wall {
+                        for neighbor in pos.big_ring_iter(self.cell_radius, 1) {
+                            if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
+                                hex_data.automaton_count += 1;
+                            }
                         }
                     }
+                    end = false;
                 }
             }
+            if end {
+                break;
+            }
+            r += 1;
         }
     }
 
@@ -238,35 +307,53 @@ impl<R: HexRenderer> World<R> {
         frozen
     }
 
-    pub fn expand(&mut self, radius: usize, cell_radius: usize) {
-        if cell_radius <= 0 {
+    pub fn expand(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if self.cell_radius <= 0 {
             return;
         }
         self.renderer.set_cell_radius(0);
-        for r in 0..=radius {
-            for pos in AxialVector::default().big_ring_iter(cell_radius, r) {
-                let HexData {
-                    state: hex_state, ..
-                } = self.hexes.get(pos).unwrap().0;
-                let wall = match hex_state {
-                    HexState::Wall | HexState::HardWall => true,
-                    HexState::Open => false,
-                };
-                for s in 1..=cell_radius {
-                    for sub_pos in pos.ring_iter(s) {
-                        self.hexes.insert(
-                            sub_pos,
-                            (
-                                HexData {
-                                    state: hex_state,
-                                    automaton_count: 0,
-                                },
-                                self.renderer.new_hex(wall, true),
-                            ),
-                        );
+        let mut r = 0;
+        loop {
+            let mut end = true;
+            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
+                if let Some((
+                    HexData {
+                        state: hex_state, ..
+                    },
+                    _,
+                )) = self.hexes.get(pos)
+                {
+                    let hex_state = *hex_state;
+                    let wall = match hex_state {
+                        HexState::Wall | HexState::HardWall => true,
+                        HexState::Open => false,
+                    };
+                    if !self.shape.contains(pos) {
+                        self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
                     }
+                    for s in 1..=self.cell_radius {
+                        for sub_pos in pos.ring_iter(s) {
+                            if self.shape.contains(sub_pos) {
+                                self.hexes.insert(
+                                    sub_pos,
+                                    (
+                                        HexData {
+                                            state: hex_state,
+                                            automaton_count: 0,
+                                        },
+                                        self.renderer.new_hex(wall, true),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                    end = false;
                 }
             }
+            if end {
+                break;
+            }
+            r += 1;
         }
         self.renderer_dirty = true;
     }
@@ -274,7 +361,7 @@ impl<R: HexRenderer> World<R> {
     fn find_open_hex(&self) -> Option<AxialVector> {
         let mut r = 0;
         loop {
-            for pos in AxialVector::default().ring_iter(r) {
+            for pos in self.shape.center().ring_iter(r) {
                 let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
                 match hex_data {
                     Some(HexData {

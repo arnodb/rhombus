@@ -167,3 +167,9 @@ impl CubicRangeShape {
         )
     }
 }
+
+impl Default for CubicRangeShape {
+    fn default() -> Self {
+        CubicRangeShape::new(-1..=1, -1..=1, -1..=1)
+    }
+}
