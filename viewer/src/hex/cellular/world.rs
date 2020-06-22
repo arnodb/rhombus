@@ -12,7 +12,11 @@ use crate::{
     },
     world::RhombusViewerWorld,
 };
-use amethyst::{ecs::prelude::*, prelude::*};
+use amethyst::{
+    ecs::prelude::*,
+    prelude::*,
+    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
+};
 use rand::{thread_rng, RngCore};
 use rhombus_core::hex::{
     coordinates::{axial::AxialVector, cubic::CubicVector, direction::HexagonalDirection},
@@ -82,6 +86,7 @@ pub enum MoveMode {
 pub struct World<R: HexRenderer> {
     shape: CubicRangeShape,
     cell_radius: usize,
+    limits_entity: Option<Entity>,
     hexes: RectHashStorage<(HexData, R::Hex)>,
     renderer: R,
     renderer_dirty: bool,
@@ -93,6 +98,7 @@ impl<R: HexRenderer> World<R> {
         Self {
             shape: CubicRangeShape::default(),
             cell_radius: 1,
+            limits_entity: None,
             hexes: RectHashStorage::new(),
             renderer,
             renderer_dirty: false,
@@ -119,6 +125,18 @@ impl<R: HexRenderer> World<R> {
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
+
+        if let Some(entity) = self.limits_entity {
+            let mut debug_lines_storage = data.world.write_storage::<DebugLinesComponent>();
+            let debug_lines = debug_lines_storage.get_mut(entity).expect("Debug lines");
+            debug_lines.clear();
+            self.add_limit_lines(debug_lines, &world);
+        } else {
+            let mut debug_lines = DebugLinesComponent::with_capacity(6);
+            self.add_limit_lines(&mut debug_lines, &world);
+            self.limits_entity = Some(data.world.create_entity().with(debug_lines).build());
+        }
+
         self.cell_radius = Self::compute_cell_radius(&self.shape, cell_radius_ratio_den);
         self.renderer.set_cell_radius(self.cell_radius);
         let mut rng = thread_rng();
@@ -205,6 +223,9 @@ impl<R: HexRenderer> World<R> {
         self.delete_pointer(data, world);
         self.renderer.clear(data);
         self.hexes.dispose(data);
+        if let Some(entity) = self.limits_entity.take() {
+            data.world.delete_entity(entity).expect("delete entity");
+        }
     }
 
     fn delete_pointer(
@@ -215,6 +236,22 @@ impl<R: HexRenderer> World<R> {
         if let Some((mut pointer, _)) = self.pointer.take() {
             pointer.delete_entities(data, world);
         }
+    }
+
+    fn add_limit_lines(&self, debug_lines: &mut DebugLinesComponent, world: &RhombusViewerWorld) {
+        let translations = self
+            .shape
+            .vertices()
+            .iter()
+            .map(|v| world.axial_translation((*v, 2.0).into()))
+            .collect::<Vec<[f32; 3]>>();
+        let color = Srgba::new(0.2, 0.2, 0.2, 1.0);
+        debug_lines.add_line(translations[0].into(), translations[1].into(), color);
+        debug_lines.add_line(translations[1].into(), translations[2].into(), color);
+        debug_lines.add_line(translations[2].into(), translations[3].into(), color);
+        debug_lines.add_line(translations[3].into(), translations[4].into(), color);
+        debug_lines.add_line(translations[4].into(), translations[5].into(), color);
+        debug_lines.add_line(translations[5].into(), translations[0].into(), color);
     }
 
     pub fn cellular_automaton_phase1_step1(&mut self) {
