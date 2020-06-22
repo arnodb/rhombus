@@ -361,6 +361,7 @@ impl<R: HexRenderer> World<R> {
     fn find_open_hex(&self) -> Option<AxialVector> {
         let mut r = 0;
         loop {
+            let mut end = true;
             for pos in self.shape.center().ring_iter(r) {
                 let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
                 match hex_data {
@@ -368,9 +369,12 @@ impl<R: HexRenderer> World<R> {
                         state: HexState::Open,
                         ..
                     }) => return Some(pos),
-                    Some(..) => (),
-                    None => return None,
+                    Some(..) => end = false,
+                    None => (),
                 }
+            }
+            if end {
+                return None;
             }
             r += 1;
         }
