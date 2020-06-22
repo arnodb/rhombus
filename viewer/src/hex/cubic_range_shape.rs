@@ -65,9 +65,8 @@ impl HexCubicRangeShapeDemo {
     ) {
         self.renderer.clear(data);
         self.world.dispose(data);
-        let position = self.pointer.position();
-        self.pointer
-            .set_position(self.shape.center(), 0, data, world);
+        let position = self.shape.center();
+        self.pointer.set_position(position, 0, data, world);
         if self.shape.contains(position) {
             self.pointer.set_direction(
                 self.pointer.direction(),
@@ -84,13 +83,16 @@ impl HexCubicRangeShapeDemo {
             );
         }
         for v in self.shape.vertices().iter() {
-            self.world.insert(*v, self.renderer.new_hex(true, true));
+            self.world
+                .insert(*v, self.renderer.new_hex(true, true))
+                .map(|mut hex| hex.dispose(data));
             self.renderer
                 .update_hex(*v, &mut self.world.get_mut(*v).unwrap(), data, world);
         }
         let center = self.shape.center();
         self.world
-            .insert(center, self.renderer.new_hex(false, true));
+            .insert(center, self.renderer.new_hex(false, true))
+            .map(|mut hex| hex.dispose(data));
         self.renderer.update_hex(
             center,
             &mut self.world.get_mut(center).unwrap(),
@@ -101,21 +103,11 @@ impl HexCubicRangeShapeDemo {
 
     fn try_resize_shape(
         &mut self,
-        (x_start, x_end): (isize, isize),
-        (y_start, y_end): (isize, isize),
-        (z_start, z_end): (isize, isize),
+        resize: fn(&mut CubicRangeShape) -> bool,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) {
-        let range_x = self.shape.range_x();
-        let range_x = *range_x.start() + x_start..=*range_x.end() + x_end;
-        let range_y = self.shape.range_y();
-        let range_y = *range_y.start() + y_start..=*range_y.end() + y_end;
-        let range_z = self.shape.range_z();
-        let range_z = *range_z.start() + z_start..=*range_z.end() + z_end;
-        if CubicRangeShape::are_ranges_valid(&range_x, &range_y, &range_z) {
-            self.shape = CubicRangeShape::new(range_x, range_y, range_z);
-        }
+        resize(&mut self.shape);
         self.reset_shape(data, world);
     }
 
@@ -189,54 +181,66 @@ impl SimpleState for HexCubicRangeShapeDemo {
                 }
                 Some((VirtualKeyCode::F, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (if modifiers.shift { 1 } else { -1 }, 0),
-                        (0, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_x_start
+                        } else {
+                            CubicRangeShape::stretch_x_start
+                        },
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::G, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (0, if !modifiers.shift { 1 } else { -1 }),
-                        (0, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_x_end
+                        } else {
+                            CubicRangeShape::stretch_x_end
+                        },
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::H, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (0, 0),
-                        (if modifiers.shift { 1 } else { -1 }, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_y_start
+                        } else {
+                            CubicRangeShape::stretch_y_start
+                        },
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::J, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (0, 0),
-                        (0, if !modifiers.shift { 1 } else { -1 }),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_y_end
+                        } else {
+                            CubicRangeShape::stretch_y_end
+                        },
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::K, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (0, 0),
-                        (0, 0),
-                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_z_start
+                        } else {
+                            CubicRangeShape::stretch_z_start
+                        },
                         &mut data,
                         &world,
                     );
                 }
                 Some((VirtualKeyCode::L, ElementState::Pressed, modifiers)) => {
                     self.try_resize_shape(
-                        (0, 0),
-                        (0, 0),
-                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_z_end
+                        } else {
+                            CubicRangeShape::stretch_z_end
+                        },
                         &mut data,
                         &world,
                     );

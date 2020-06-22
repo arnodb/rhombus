@@ -44,13 +44,16 @@ impl<R: HexRenderer> HexCellularBuilder<R> {
 
     fn reset(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         let world_radius = 42;
-        let shape = CubicRangeShape::new(
-            -world_radius..=world_radius,
-            -world_radius..=world_radius,
-            -world_radius..=world_radius,
+        self.world.set_shape_and_reset_world(
+            CubicRangeShape::new(
+                -world_radius..=world_radius,
+                -world_radius..=world_radius,
+                -world_radius..=world_radius,
+            ),
+            CELL_RADIUS_RATIO_DEN,
+            WALL_RATIO,
+            data,
         );
-        self.world
-            .reset_world(shape, CELL_RADIUS_RATIO_DEN, WALL_RATIO, data);
         self.state = CellularState::GrowingPhase1;
         self.remaining_millis = 0;
     }
@@ -80,17 +83,10 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                     trans = Trans::Pop;
                 }
                 Some((VirtualKeyCode::N, ElementState::Pressed, _)) => {
-                    if self.world.try_resize_shape(
-                        (0, 0),
-                        (0, 0),
-                        (0, 0),
-                        CELL_RADIUS_RATIO_DEN,
-                        WALL_RATIO,
-                        &mut data,
-                    ) {
-                        self.state = CellularState::GrowingPhase1;
-                        self.remaining_millis = 0;
-                    }
+                    self.world
+                        .reset_world(CELL_RADIUS_RATIO_DEN, WALL_RATIO, &mut data);
+                    self.state = CellularState::GrowingPhase1;
+                    self.remaining_millis = 0;
                 }
                 Some((VirtualKeyCode::Right, ElementState::Pressed, modifiers)) => {
                     if modifiers.shift {
@@ -137,9 +133,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::F, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (if modifiers.shift { 1 } else { -1 }, 0),
-                        (0, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_x_start
+                        } else {
+                            CubicRangeShape::stretch_x_start
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,
@@ -150,9 +148,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::G, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (0, if !modifiers.shift { 1 } else { -1 }),
-                        (0, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_x_end
+                        } else {
+                            CubicRangeShape::stretch_x_end
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,
@@ -163,9 +163,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::H, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (0, 0),
-                        (if modifiers.shift { 1 } else { -1 }, 0),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_y_start
+                        } else {
+                            CubicRangeShape::stretch_y_start
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,
@@ -176,9 +178,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::J, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (0, 0),
-                        (0, if !modifiers.shift { 1 } else { -1 }),
-                        (0, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_y_end
+                        } else {
+                            CubicRangeShape::stretch_y_end
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,
@@ -189,9 +193,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::K, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (0, 0),
-                        (0, 0),
-                        (if modifiers.shift { 1 } else { -1 }, 0),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_z_start
+                        } else {
+                            CubicRangeShape::stretch_z_start
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,
@@ -202,9 +208,11 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 Some((VirtualKeyCode::L, ElementState::Pressed, modifiers)) => {
                     if self.world.try_resize_shape(
-                        (0, 0),
-                        (0, 0),
-                        (0, if !modifiers.shift { 1 } else { -1 }),
+                        if modifiers.shift {
+                            CubicRangeShape::shrink_z_end
+                        } else {
+                            CubicRangeShape::stretch_z_end
+                        },
                         CELL_RADIUS_RATIO_DEN,
                         WALL_RATIO,
                         &mut data,

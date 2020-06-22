@@ -100,16 +100,25 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn reset_world(
+    pub fn set_shape_and_reset_world(
         &mut self,
         shape: CubicRangeShape,
         cell_radius_ratio_den: usize,
         wall_ratio: f32,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
+        self.shape = shape;
+        self.reset_world(cell_radius_ratio_den, wall_ratio, data);
+    }
+
+    pub fn reset_world(
+        &mut self,
+        cell_radius_ratio_den: usize,
+        wall_ratio: f32,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+    ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
-        self.shape = shape;
         self.cell_radius = Self::compute_cell_radius(&self.shape, cell_radius_ratio_den);
         self.renderer.set_cell_radius(self.cell_radius);
         let mut rng = thread_rng();
@@ -165,22 +174,13 @@ impl<R: HexRenderer> World<R> {
 
     pub fn try_resize_shape(
         &mut self,
-        (x_start, x_end): (isize, isize),
-        (y_start, y_end): (isize, isize),
-        (z_start, z_end): (isize, isize),
+        resize: fn(&mut CubicRangeShape) -> bool,
         cell_radius_ratio_den: usize,
         wall_ratio: f32,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) -> bool {
-        let range_x = self.shape.range_x();
-        let range_x = *range_x.start() + x_start..=*range_x.end() + x_end;
-        let range_y = self.shape.range_y();
-        let range_y = *range_y.start() + y_start..=*range_y.end() + y_end;
-        let range_z = self.shape.range_z();
-        let range_z = *range_z.start() + z_start..=*range_z.end() + z_end;
-        if CubicRangeShape::are_ranges_valid(&range_x, &range_y, &range_z) {
-            let shape = CubicRangeShape::new(range_x, range_y, range_z);
-            self.reset_world(shape, cell_radius_ratio_den, wall_ratio, data);
+        if resize(&mut self.shape) {
+            self.reset_world(cell_radius_ratio_den, wall_ratio, data);
             true
         } else {
             false

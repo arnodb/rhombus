@@ -63,7 +63,7 @@ impl CubicRangeShape {
     ) -> bool {
         let edges_lengths = Self::signed_edges_lengths(range_x, range_y, range_z);
         for edge_length in &edges_lengths {
-            if *edge_length <= 0 {
+            if *edge_length < 0 {
                 return false;
             }
         }
@@ -165,6 +165,118 @@ impl CubicRangeShape {
                     / 2)
                 / 3,
         )
+    }
+
+    pub fn stretch_x_start(&mut self) -> bool {
+        Self::stretch_axis_start(&mut self.range_x, &mut self.range_y, &mut self.range_z)
+    }
+
+    pub fn stretch_y_start(&mut self) -> bool {
+        Self::stretch_axis_start(&mut self.range_y, &mut self.range_z, &mut self.range_x)
+    }
+
+    pub fn stretch_z_start(&mut self) -> bool {
+        Self::stretch_axis_start(&mut self.range_z, &mut self.range_x, &mut self.range_y)
+    }
+
+    fn stretch_axis_start(
+        a: &mut RangeInclusive<isize>,
+        b: &mut RangeInclusive<isize>,
+        c: &mut RangeInclusive<isize>,
+    ) -> bool {
+        *a = a.start() - 1..=*a.end();
+        if a.start() + b.end() + c.end() < 0 {
+            *b = *b.start()..=b.end() + 1;
+            *c = *c.start()..=c.end() + 1;
+        }
+        true
+    }
+
+    pub fn stretch_x_end(&mut self) -> bool {
+        Self::stretch_axis_end(&mut self.range_x, &mut self.range_y, &mut self.range_z)
+    }
+
+    pub fn stretch_y_end(&mut self) -> bool {
+        Self::stretch_axis_end(&mut self.range_y, &mut self.range_z, &mut self.range_x)
+    }
+
+    pub fn stretch_z_end(&mut self) -> bool {
+        Self::stretch_axis_end(&mut self.range_z, &mut self.range_x, &mut self.range_y)
+    }
+
+    fn stretch_axis_end(
+        a: &mut RangeInclusive<isize>,
+        b: &mut RangeInclusive<isize>,
+        c: &mut RangeInclusive<isize>,
+    ) -> bool {
+        *a = *a.start()..=a.end() + 1;
+        if -a.end() - b.start() - c.start() < 0 {
+            *b = b.start() - 1..=*b.end();
+            *c = c.start() - 1..=*c.end();
+        }
+        true
+    }
+
+    pub fn shrink_x_start(&mut self) -> bool {
+        Self::shrink_axis_start(&mut self.range_x, &mut self.range_y, &mut self.range_z)
+    }
+
+    pub fn shrink_y_start(&mut self) -> bool {
+        Self::shrink_axis_start(&mut self.range_y, &mut self.range_z, &mut self.range_x)
+    }
+
+    pub fn shrink_z_start(&mut self) -> bool {
+        Self::shrink_axis_start(&mut self.range_z, &mut self.range_x, &mut self.range_y)
+    }
+
+    fn shrink_axis_start(
+        a: &mut RangeInclusive<isize>,
+        b: &mut RangeInclusive<isize>,
+        c: &mut RangeInclusive<isize>,
+    ) -> bool {
+        if a.start() < a.end() {
+            *a = a.start() + 1..=*a.end();
+            if -a.start() - b.end() - c.start() < 0 {
+                *b = *b.start()..=b.end() - 1;
+            }
+            if -a.start() - b.start() - c.end() < 0 {
+                *c = *c.start()..=c.end() - 1;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn shrink_x_end(&mut self) -> bool {
+        Self::shrink_axis_end(&mut self.range_x, &mut self.range_y, &mut self.range_z)
+    }
+
+    pub fn shrink_y_end(&mut self) -> bool {
+        Self::shrink_axis_end(&mut self.range_y, &mut self.range_z, &mut self.range_x)
+    }
+
+    pub fn shrink_z_end(&mut self) -> bool {
+        Self::shrink_axis_end(&mut self.range_z, &mut self.range_x, &mut self.range_y)
+    }
+
+    fn shrink_axis_end(
+        a: &mut RangeInclusive<isize>,
+        b: &mut RangeInclusive<isize>,
+        c: &mut RangeInclusive<isize>,
+    ) -> bool {
+        if a.start() < a.end() {
+            *a = *a.start()..=*a.end() - 1;
+            if a.end() + b.start() + c.end() < 0 {
+                *b = b.start() + 1..=*b.end();
+            }
+            if a.end() + b.end() + c.start() < 0 {
+                *c = c.start() + 1..=*c.end();
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 
