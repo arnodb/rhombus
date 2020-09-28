@@ -39,7 +39,7 @@ use amethyst::{
     input::{is_key_down, InputBundle, StringBindings},
     prelude::*,
     renderer::{
-        camera::{Camera, Perspective, Projection},
+        camera::Camera,
         debug_drawing::DebugLinesComponent,
         formats::mesh::ObjFormat,
         light::{Light, PointLight},
@@ -318,13 +318,11 @@ impl SimpleState for RhombusViewer {
         ));
         data.world.insert(world);
 
-        let mut camera = Camera::standard_3d(WIDTH as f32, HEIGHT as f32);
-        camera.set_projection(Projection::Perspective(Perspective::new(
-            1.3,
+        let camera = Camera::perspective(
+            WIDTH as f32 / HEIGHT as f32,
             std::f32::consts::FRAC_PI_4,
             0.1,
-            2000.0,
-        )));
+        );
 
         data.world
             .create_entity()
