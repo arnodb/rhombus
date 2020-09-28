@@ -175,7 +175,7 @@ impl HexRenderer for EdgeRenderer {
         Wall: Fn(AxialVector, &StorageHex) -> bool,
         Visible: Fn(AxialVector, &StorageHex) -> bool,
     {
-        let mut dirty = self.previous_visible_only != visible_only;
+        let mut dirty = self.entity.is_none() || self.previous_visible_only != visible_only;
         for (position, mut hex_with_adjacents) in hexes.positions_and_hexes_with_adjacents_mut() {
             let wall = is_wall_hex(position, hex_with_adjacents.hex());
             let visible = is_visible_hex(position, hex_with_adjacents.hex());
