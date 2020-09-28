@@ -64,15 +64,17 @@ impl HexFlatBuilderDemo {
     }
 
     fn raise_wall(&mut self, position: AxialVector, data: &mut StateData<'_, GameData<'_, '_>>) {
-        self.world.insert(
-            position,
-            (
-                HexData {
-                    state: HexState::Wall,
-                },
-                self.renderer.new_hex(true, true),
-            ),
-        );
+        self.world
+            .insert(
+                position,
+                (
+                    HexData {
+                        state: HexState::Wall,
+                    },
+                    self.renderer.new_hex(true, true),
+                ),
+            )
+            .map(|mut hex| hex.dispose(data));
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.renderer.update_hex(
             position,
@@ -87,15 +89,17 @@ impl SimpleState for HexFlatBuilderDemo {
     fn on_start(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer.create_entities(&mut data, &world);
-        self.world.insert(
-            self.pointer.position(),
-            (
-                HexData {
-                    state: HexState::Open,
-                },
-                self.renderer.new_hex(false, true),
-            ),
-        );
+        self.world
+            .insert(
+                self.pointer.position(),
+                (
+                    HexData {
+                        state: HexState::Open,
+                    },
+                    self.renderer.new_hex(false, true),
+                ),
+            )
+            .map(|mut hex| hex.dispose(&mut data));
         self.renderer.update_hex(
             self.pointer.position(),
             &mut self.world.get_mut(self.pointer.position()).unwrap().1,
