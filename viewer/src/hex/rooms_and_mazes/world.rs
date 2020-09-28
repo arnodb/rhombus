@@ -1,37 +1,65 @@
 use crate::{
-    assets::Color,
-    hex::{cellular::world::FovState, pointer::HexPointer, shape::cubic_range::CubicRangeShape},
+    dispose::Dispose,
+    hex::{
+        cellular::world::FovState, pointer::HexPointer, render::renderer::HexRenderer,
+        shape::cubic_range::CubicRangeShape,
+    },
     world::RhombusViewerWorld,
 };
 use amethyst::{
-    core::{math::Vector3, transform::Transform},
     ecs::prelude::*,
     prelude::*,
     renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
 };
 use rand::{thread_rng, Rng};
-use rhombus_core::hex::coordinates::{axial::AxialVector, cubic::CubicVector};
-use std::sync::Arc;
+use rhombus_core::hex::{
+    coordinates::{
+        axial::AxialVector,
+        cubic::CubicVector,
+        direction::{HexagonalDirection, NUM_DIRECTIONS},
+    },
+    field_of_view::FieldOfView,
+    storage::hash::RectHashStorage,
+};
+use std::{collections::HashSet, sync::Arc};
 
-const CELL_RADIUS: usize = 3;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HexState {
+    Open,
+    Wall,
+}
 
-pub struct World {
+pub struct HexData {
+    state: HexState,
+}
+
+impl Dispose for HexData {
+    fn dispose(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
+}
+
+const CELL_RADIUS_RATIO_DEN: usize = 42;
+
+pub struct World<R: HexRenderer> {
     shape: CubicRangeShape,
     shape_positions: Vec<AxialVector>,
+    hexes: RectHashStorage<(HexData, R::Hex)>,
+    renderer: R,
+    renderer_dirty: bool,
     limits_entity: Option<Entity>,
     rooms: Vec<(CubicRangeShape, Entity)>,
-    perimeter_entities: Vec<Entity>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
-impl World {
-    pub fn new() -> Self {
+impl<R: HexRenderer> World<R> {
+    pub fn new(renderer: R) -> Self {
         Self {
             shape: CubicRangeShape::default(),
             shape_positions: Vec::new(),
+            hexes: RectHashStorage::new(),
+            renderer,
+            renderer_dirty: false,
             limits_entity: None,
             rooms: Vec::new(),
-            perimeter_entities: Vec::new(),
             pointer: None,
         }
     }
@@ -42,22 +70,23 @@ impl World {
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
         self.shape = shape;
+        let cell_radius = Self::compute_cell_radius(&self.shape, CELL_RADIUS_RATIO_DEN);
         let mut r = 0;
         loop {
             let mut end = true;
-            for pos in self.shape.center().big_ring_iter(CELL_RADIUS, r) {
-                let mut positions = Vec::new();
-                for v in pos.ring_iter(CELL_RADIUS) {
+            for pos in self.shape.center().big_ring_iter(cell_radius, r) {
+                let mut one_inside = false;
+                for v in pos.ring_iter(cell_radius) {
                     if self.shape.contains_position(v) {
-                        positions.push(v);
+                        self.shape_positions.push(v);
+                        one_inside = true;
                     }
                 }
-                if positions.is_empty() {
+                if !one_inside {
                     continue;
                 }
                 end = false;
-                self.shape_positions.extend(positions);
-                for s in 0..CELL_RADIUS {
+                for s in 0..cell_radius {
                     for v in pos.ring_iter(s) {
                         if self.shape.contains_position(v) {
                             self.shape_positions.push(v);
@@ -98,21 +127,29 @@ impl World {
             self.limits_entity = Some(data.world.create_entity().with(debug_lines).build());
         }
 
-        for pos in self.shape.perimeter() {
-            let mut transform = Transform::default();
-            transform.set_scale(Vector3::new(0.8, 0.08, 0.8));
-            let pos = (pos, 0.0).into();
-            world.transform_axial(pos, &mut transform);
-            let material = world.assets.color_data[&Color::Red].light.clone();
-            let entity = data
-                .world
-                .create_entity()
-                .with(world.assets.hex_handle.clone())
-                .with(material)
-                .with(transform)
-                .build();
-            self.perimeter_entities.push(entity);
+        for v in &self.shape_positions {
+            self.hexes.insert(
+                *v,
+                (
+                    HexData {
+                        state: HexState::Wall,
+                    },
+                    self.renderer.new_hex(true, true),
+                ),
+            );
         }
+
+        self.renderer_dirty = true;
+    }
+
+    fn compute_cell_radius(shape: &CubicRangeShape, cell_radius_ratio_den: usize) -> usize {
+        let mut deltas = [
+            shape.range_x().end() - shape.range_x().start(),
+            shape.range_y().end() - shape.range_y().start(),
+            shape.range_z().end() - shape.range_z().start(),
+        ];
+        deltas.sort();
+        deltas[1] as usize / cell_radius_ratio_den
     }
 
     pub fn clear(
@@ -120,10 +157,6 @@ impl World {
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) {
-        for entity in self.perimeter_entities.iter() {
-            data.world.delete_entity(*entity).expect("delete entity");
-        }
-        self.perimeter_entities.clear();
         self.delete_pointer(data, world);
         for (_, entity) in self.rooms.iter() {
             data.world.delete_entity(*entity).expect("delete entity");
@@ -132,6 +165,8 @@ impl World {
         if let Some(entity) = self.limits_entity.take() {
             data.world.delete_entity(entity).expect("delete entity");
         }
+        self.renderer.clear(data);
+        self.hexes.dispose(data);
     }
 
     fn delete_pointer(
@@ -163,7 +198,7 @@ impl World {
         debug_lines.add_line(translations[5].into(), translations[0].into(), color);
     }
 
-    pub fn room_phase_step(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn add_room(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         let mut deltas = [
             self.shape.range_x().end() - self.shape.range_x().start(),
             self.shape.range_y().end() - self.shape.range_y().start(),
@@ -224,13 +259,13 @@ impl World {
         start_x += delta_x;
         let end_x = new_room.range_x().end() + random_pos.x() + delta_x;
 
-        let mut start_y = new_room.range_y().start() + random_pos.y();
-        let delta_y = (start_y - self.shape.range_y().start() + 1) % 2;
-        start_y += delta_y;
-        let end_y = new_room.range_y().end() + random_pos.y() + delta_y;
+        let mut start_z = new_room.range_z().start() + random_pos.z();
+        let delta_z = (start_z - self.shape.range_z().start() + 1) % 2;
+        start_z += delta_z;
+        let end_z = new_room.range_z().end() + random_pos.z() + delta_z;
 
-        let start_z = new_room.range_z().start() + random_pos.z() - delta_x - delta_y;
-        let end_z = new_room.range_z().end() + random_pos.z() - delta_x - delta_y;
+        let start_y = new_room.range_y().start() + random_pos.y() - delta_x - delta_z;
+        let end_y = new_room.range_y().end() + random_pos.y() - delta_x - delta_z;
 
         let is_inside_shape = self.shape.range_x().start() < start_x
             && self.shape.range_x().end() > end_x
@@ -256,24 +291,106 @@ impl World {
             );
             let new_entity = data.world.create_entity().with(debug_lines).build();
 
-            for pos in new_room.perimeter() {
-                let mut transform = Transform::default();
-                transform.set_scale(Vector3::new(0.8, 0.08, 0.8));
-                let pos = (pos, 0.0).into();
-                world.transform_axial(pos, &mut transform);
-                let material = world.assets.color_data[&Color::Green].light.clone();
-                let entity = data
-                    .world
-                    .create_entity()
-                    .with(world.assets.hex_handle.clone())
-                    .with(material)
-                    .with(transform)
-                    .build();
-                self.perimeter_entities.push(entity);
+            let mut r = 0;
+            loop {
+                let mut end = true;
+                for pos in new_room.center().ring_iter(r) {
+                    if new_room.contains_position(pos) {
+                        self.hexes.get_mut(pos).expect("new room cell").0.state = HexState::Open;
+                        end = false;
+                    }
+                }
+                if end {
+                    break;
+                }
+                r += 1;
             }
 
             self.rooms.push((new_room, new_entity));
+
+            self.renderer_dirty = true;
         }
+    }
+
+    pub fn start_maze(&self) -> MazeState {
+        MazeState {
+            next_pos: 0,
+            cells: Vec::new(),
+        }
+    }
+
+    pub fn grow_maze(&mut self, state: &mut MazeState) -> bool {
+        loop {
+            let mut rng = thread_rng();
+            if state.cells.is_empty() {
+                let mut pos = state.next_pos;
+                loop {
+                    if pos < self.shape_positions.len() {
+                        let cell = self.shape_positions[pos];
+                        if self.can_carve(cell) {
+                            state.next_pos = pos + 1;
+                            state.cells.push((cell, None));
+                            break;
+                        } else {
+                            pos += 1;
+                        }
+                    } else {
+                        return true;
+                    }
+                }
+            }
+            if let Some((cell, via)) = state.cells.pop() {
+                if self.can_carve(cell) {
+                    if let Some(via) = via {
+                        self.hexes.get_mut(via).expect("via cell").0.state = HexState::Open;
+                    }
+                    self.hexes.get_mut(cell).expect("carve cell").0.state = HexState::Open;
+                    self.renderer_dirty = true;
+                    let mut directions = Vec::new();
+                    for dir in 0..NUM_DIRECTIONS {
+                        let neighbour = cell + AxialVector::direction(dir) * 2;
+                        if self.can_carve(neighbour) {
+                            directions.push(dir);
+                        }
+                    }
+                    if !directions.is_empty() {
+                        let d = rng.gen_range(0, directions.len());
+                        let dir = directions[d];
+                        let via = cell + AxialVector::direction(dir);
+                        let neighbour = cell + AxialVector::direction(dir) * 2;
+                        state.cells.push((neighbour, Some(via)));
+                        for (i, dir) in directions.into_iter().enumerate() {
+                            if i != d {
+                                let via = cell + AxialVector::direction(dir);
+                                let neighbour = cell + AxialVector::direction(dir) * 2;
+                                state.cells.push((neighbour, Some(via)));
+                            }
+                        }
+                    }
+                    return false;
+                }
+            } else {
+                break;
+            }
+        }
+        return true;
+    }
+
+    fn can_carve(&self, position: AxialVector) -> bool {
+        let cubic = CubicVector::from(position);
+        let is_inside_shape = self.shape.range_x().start() < cubic.x()
+            && self.shape.range_x().end() > cubic.x()
+            && self.shape.range_y().start() < cubic.y()
+            && self.shape.range_y().end() > cubic.y()
+            && self.shape.range_z().start() < cubic.z()
+            && self.shape.range_z().end() > cubic.z();
+        is_inside_shape
+            && ((cubic.x() - self.shape.range_x().start()) % 2 == 1)
+            && ((cubic.z() - self.shape.range_z().start()) % 2 == 1)
+            && self
+                .hexes
+                .get(position)
+                .map_or(false, |(data, _)| data.state == HexState::Wall)
     }
 
     pub fn create_pointer(
@@ -287,5 +404,78 @@ impl World {
         // TODO
     }
 
-    pub fn update_renderer_world(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
+    pub fn update_renderer_world(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if !self.renderer_dirty {
+            return;
+        }
+
+        let (visible_positions, visible_only) = if let Some((pointer, fov_state)) = &self.pointer {
+            let mut visible_positions = HashSet::new();
+            visible_positions.insert(pointer.position());
+            let mut fov = FieldOfView::default();
+            fov.start(pointer.position());
+            let is_obstacle = |pos| {
+                let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
+                match hex_data {
+                    Some(HexData {
+                        state: HexState::Open,
+                        ..
+                    }) => false,
+                    Some(HexData {
+                        state: HexState::Wall,
+                        ..
+                    }) => true,
+                    None => false,
+                }
+            };
+            loop {
+                let prev_len = visible_positions.len();
+                for pos in fov.iter() {
+                    let key = pointer.position() + pos;
+                    if self.hexes.contains_position(key) {
+                        let inserted = visible_positions.insert(key);
+                        debug_assert!(inserted);
+                    }
+                }
+                if visible_positions.len() == prev_len {
+                    break;
+                }
+                fov.next_radius(&is_obstacle);
+            }
+            (
+                Some(visible_positions),
+                match fov_state {
+                    FovState::Partial => false,
+                    FovState::Full => true,
+                },
+            )
+        } else {
+            (None, false)
+        };
+
+        let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+
+        self.renderer.update_world(
+            &mut self.hexes,
+            |_, hex| hex.0.state != HexState::Open,
+            |pos, _| {
+                visible_positions
+                    .as_ref()
+                    .map_or(true, |vp| vp.contains(&pos))
+            },
+            |hex| &mut hex.1,
+            visible_only,
+            false,
+            data,
+            &world,
+        );
+
+        self.renderer_dirty = false;
+    }
+}
+
+#[derive(Debug)]
+pub struct MazeState {
+    next_pos: usize,
+    cells: Vec<(AxialVector, Option<AxialVector>)>,
 }

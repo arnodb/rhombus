@@ -1,6 +1,8 @@
 use crate::{
     hex::{
-        cellular::world::FovState, rooms_and_mazes::world::World,
+        cellular::world::FovState,
+        render::tile::{HexScale, TileRenderer},
+        rooms_and_mazes::world::{MazeState, World},
         shape::cubic_range::CubicRangeShape,
     },
     input::get_key_and_modifiers,
@@ -13,15 +15,16 @@ use std::sync::Arc;
 
 const ROOM_ROUNDS: usize = 100;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 enum BuilderState {
     Rooms(usize),
+    Maze(MazeState),
     Grown,
     FieldOfView(bool),
 }
 
 pub struct HexRoomsAndMazesBuilder {
-    world: World,
+    world: World<TileRenderer>,
     remaining_millis: u64,
     state: BuilderState,
 }
@@ -29,7 +32,17 @@ pub struct HexRoomsAndMazesBuilder {
 impl HexRoomsAndMazesBuilder {
     pub fn new() -> Self {
         Self {
-            world: World::new(),
+            world: World::new(TileRenderer::new(
+                HexScale {
+                    horizontal: 0.8,
+                    vertical: 0.1,
+                },
+                HexScale {
+                    horizontal: 0.8,
+                    vertical: 1.0,
+                },
+                0,
+            )),
             remaining_millis: 0,
             state: BuilderState::Grown,
         }
@@ -103,14 +116,19 @@ impl SimpleState for HexRoomsAndMazesBuilder {
         let num = delta_millis / 5;
         self.remaining_millis = delta_millis % 5;
         for _ in 0..num {
-            match self.state {
+            match &mut self.state {
                 BuilderState::Rooms(countdown) => {
-                    self.world.room_phase_step(data);
-                    self.state = if countdown > 1 {
-                        BuilderState::Rooms(countdown - 1)
+                    self.world.add_room(data);
+                    self.state = if *countdown > 1 {
+                        BuilderState::Rooms(*countdown - 1)
                     } else {
-                        BuilderState::Grown
+                        BuilderState::Maze(self.world.start_maze())
                     };
+                }
+                BuilderState::Maze(state) => {
+                    if self.world.grow_maze(state) {
+                        self.state = BuilderState::Grown;
+                    }
                 }
                 BuilderState::Grown => {
                     self.world.create_pointer(FovState::Partial, data);
