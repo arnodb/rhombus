@@ -6,5 +6,6 @@ pub mod flat_builder;
 pub mod pointer;
 pub mod render;
 pub mod ring;
+pub mod rooms_and_mazes;
 pub mod shape;
 pub mod snake;

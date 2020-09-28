@@ -8,7 +8,7 @@ use crate::{
             renderer::HexRenderer,
             tile::{HexScale, TileRenderer},
         },
-        shape::cubic_range::CubicRangeShape,
+        shape::cubic_range::{CubicRangeShape, Range},
     },
     world::RhombusViewerWorld,
 };
@@ -140,13 +140,22 @@ impl<R: HexRenderer> World<R> {
         self.cell_radius = Self::compute_cell_radius(&self.shape, cell_radius_ratio_den);
         self.renderer.set_cell_radius(self.cell_radius);
         let mut rng = thread_rng();
-        let internal_ranges = [
-            self.shape.range_x().start() + 1 + self.cell_radius as isize
-                ..=self.shape.range_x().end() - 1 - self.cell_radius as isize,
-            self.shape.range_y().start() + 1 + self.cell_radius as isize
-                ..=self.shape.range_y().end() - 1 - self.cell_radius as isize,
-            self.shape.range_z().start() + 1 + self.cell_radius as isize
-                ..=self.shape.range_z().end() - 1 - self.cell_radius as isize,
+        let internal_ranges: [Range; 3] = [
+            (
+                self.shape.range_x().start() + 1 + self.cell_radius as isize,
+                self.shape.range_x().end() - 1 - self.cell_radius as isize,
+            )
+                .into(),
+            (
+                self.shape.range_y().start() + 1 + self.cell_radius as isize,
+                self.shape.range_y().end() - 1 - self.cell_radius as isize,
+            )
+                .into(),
+            (
+                self.shape.range_z().start() + 1 + self.cell_radius as isize,
+                self.shape.range_z().end() - 1 - self.cell_radius as isize,
+            )
+                .into(),
         ];
         let mut r = 0;
         loop {
@@ -154,15 +163,15 @@ impl<R: HexRenderer> World<R> {
             for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
                 if !pos
                     .ring_iter(self.cell_radius)
-                    .any(|v| self.shape.contains(v))
+                    .any(|v| self.shape.contains_position(v))
                 {
                     continue;
                 }
                 end = false;
                 let cubic = CubicVector::from(pos);
-                let state = if internal_ranges[0].contains(&cubic.x())
-                    && internal_ranges[1].contains(&cubic.y())
-                    && internal_ranges[2].contains(&cubic.z())
+                let state = if internal_ranges[0].contains(cubic.x())
+                    && internal_ranges[1].contains(cubic.y())
+                    && internal_ranges[2].contains(cubic.z())
                 {
                     if ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio {
                         HexState::Wall
@@ -192,12 +201,12 @@ impl<R: HexRenderer> World<R> {
 
     pub fn try_resize_shape(
         &mut self,
-        resize: fn(&mut CubicRangeShape) -> bool,
+        resize: fn(&mut CubicRangeShape, usize) -> bool,
         cell_radius_ratio_den: usize,
         wall_ratio: f32,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) -> bool {
-        if resize(&mut self.shape) {
+        if resize(&mut self.shape, 1) {
             self.reset_world(cell_radius_ratio_den, wall_ratio, data);
             true
         } else {
@@ -365,12 +374,12 @@ impl<R: HexRenderer> World<R> {
                         HexState::Wall | HexState::HardWall => true,
                         HexState::Open => false,
                     };
-                    if !self.shape.contains(pos) {
+                    if !self.shape.contains_position(pos) {
                         self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
                     }
                     for s in 1..=self.cell_radius {
                         for sub_pos in pos.ring_iter(s) {
-                            if self.shape.contains(sub_pos) {
+                            if self.shape.contains_position(sub_pos) {
                                 self.hexes.insert(
                                     sub_pos,
                                     (

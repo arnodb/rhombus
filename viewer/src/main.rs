@@ -18,7 +18,8 @@ use crate::{
     hex::{
         bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
         cubic_range_shape::HexCubicRangeShapeDemo, directions::HexDirectionsDemo,
-        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo, snake::HexSnakeDemo,
+        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo,
+        rooms_and_mazes::builder::HexRoomsAndMazesBuilder, snake::HexSnakeDemo,
     },
     systems::{
         camera_distance::CameraDistanceSystemDesc,
@@ -48,7 +49,7 @@ use amethyst::{
         types::{DefaultBackend, Mesh, Texture},
         Material, MaterialDefaults, RenderShaded3D, RenderingBundle,
     },
-    utils::application_root_dir,
+    utils::{application_root_dir, fps_counter::FpsCounterBundle},
     winit::VirtualKeyCode,
     Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
@@ -75,6 +76,7 @@ const HEX_CUBIC_RANGE_SHAPE: usize = 10;
 const HEX_FLAT_BUILDER: usize = 100;
 const HEX_BUMPY_BUILDER: usize = 101;
 const HEX_CELLULAR_BUILDER: usize = 102;
+const HEX_RAM_BUILDER: usize = 200;
 
 enum RhombusViewerAnimation {
     Fixed { demo_num: usize },
@@ -128,6 +130,8 @@ impl RhombusViewer {
             HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
             // Cellular hex builders
             HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new_edge()),
+            // Rooms and mazes hex builder
+            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new()),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
@@ -453,6 +457,8 @@ enum DemoOption {
     HexBumpyBuilder = HEX_BUMPY_BUILDER as isize,
     #[structopt(name = "hex-cellular-builder")]
     HexCellularBuilder = HEX_CELLULAR_BUILDER as isize,
+    #[structopt(name = "hex-ram-builder")]
+    HexRamBuilder = HEX_RAM_BUILDER as isize,
 }
 
 #[derive(StructOpt, Debug)]
@@ -476,6 +482,7 @@ fn main() -> amethyst::Result<()> {
         .unwrap_or(true);
 
     let game_data = GameDataBuilder::default()
+        .with_bundle(FpsCounterBundle::default())?
         .with_bundle(TransformBundle::new())?
         .with_bundle(InputBundle::<StringBindings>::new())?
         .with_bundle(ArcBallControlBundle::<StringBindings>::new())?

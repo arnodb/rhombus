@@ -43,7 +43,7 @@ pub struct HexCubicRangeShapeDemo {
 
 impl HexCubicRangeShapeDemo {
     pub fn new() -> Self {
-        let shape = CubicRangeShape::new(-2..=2, -2..=2, -2..=2);
+        let shape = CubicRangeShape::new((-2, 2), (-2, 2), (-2, 2));
         let world = RectHashStorage::new();
         let renderer = TileRenderer::new(
             HexScale {
@@ -87,7 +87,7 @@ impl HexCubicRangeShapeDemo {
 
         let position = self.shape.center();
         self.pointer.set_position(position, 0, data, world);
-        if self.shape.contains(position) {
+        if self.shape.contains_position(position) {
             self.pointer.set_direction(
                 self.pointer.direction(),
                 VerticalDirection::Horizontal,
@@ -123,11 +123,11 @@ impl HexCubicRangeShapeDemo {
 
     fn try_resize_shape(
         &mut self,
-        resize: fn(&mut CubicRangeShape) -> bool,
+        resize: fn(&mut CubicRangeShape, usize) -> bool,
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) {
-        resize(&mut self.shape);
+        resize(&mut self.shape, 1);
         self.reset_shape(data, world);
     }
 
@@ -159,7 +159,7 @@ impl HexCubicRangeShapeDemo {
         let next = self.pointer.position().neighbor(direction);
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.pointer.set_position(next, 0, data, &world);
-        if self.shape.contains(next) {
+        if self.shape.contains_position(next) {
             self.pointer.set_direction(
                 self.pointer.direction(),
                 VerticalDirection::Horizontal,

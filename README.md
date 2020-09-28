@@ -32,6 +32,8 @@ What works in 2D:
   and builds walls along it.
 - Very basic manual 2D 1/2 world builder: same principal except that there is no wall but
   ceilings, you can go up and down provided your head don't hit the ceiling.
+- Cellular automaton
+- (WIP) Rooms and mazes
 
 What works in 3D:
 
@@ -60,3 +62,4 @@ All sources of information:
 
 * **Hexagonal Grids** (2013-2019): https://www.redblobgames.com/grids/hexagons/
 * **The Cellular Automaton Method for Cave Generation** (2012): https://jeremykun.com/2012/07/29/the-cellular-automaton-method-for-cave-generation/
+* **Rooms and Mazes: A Procedural Dungeon Generator** (2014): http://journal.stuffwithstuff.com/2014/12/21/rooms-and-mazes/

@@ -46,9 +46,9 @@ impl<R: HexRenderer> HexCellularBuilder<R> {
         let world_radius = 42;
         self.world.set_shape_and_reset_world(
             CubicRangeShape::new(
-                -world_radius..=world_radius,
-                -world_radius..=world_radius,
-                -world_radius..=world_radius,
+                (-world_radius, world_radius),
+                (-world_radius, world_radius),
+                (-world_radius, world_radius),
             ),
             CELL_RADIUS_RATIO_DEN,
             WALL_RATIO,
