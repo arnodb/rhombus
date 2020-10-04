@@ -131,7 +131,7 @@ impl RhombusViewer {
             // Cellular hex builders
             HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new_edge()),
             // Rooms and mazes hex builder
-            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new()),
+            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new_edge()),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)

@@ -1,8 +1,7 @@
 use crate::{
     dispose::Dispose,
     hex::{
-        cellular::world::FovState, pointer::HexPointer, render::renderer::HexRenderer,
-        shape::cubic_range::CubicRangeShape,
+        pointer::HexPointer, render::renderer::HexRenderer, shape::cubic_range::CubicRangeShape,
     },
     world::RhombusViewerWorld,
 };
@@ -32,6 +31,22 @@ pub struct HexData {
 
 impl Dispose for HexData {
     fn dispose(&mut self, _data: &mut StateData<'_, GameData<'_, '_>>) {}
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FovState {
+    Partial,
+    Full,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MoveMode {
+    StraightAhead,
+    StrafeLeftAhead,
+    StrafeLeftBack,
+    StrafeRightAhead,
+    StrafeRightBack,
+    StraightBack,
 }
 
 const CELL_RADIUS_RATIO_DEN: usize = 42;
@@ -554,21 +569,98 @@ impl<R: HexRenderer> World<R> {
             for pos in remove {
                 self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
             }
+            self.renderer_dirty = true;
+        }
+    }
+
+    fn find_open_hex(&self) -> Option<AxialVector> {
+        let mut r = 0;
+        loop {
+            let mut end = true;
+            for pos in self.shape.center().ring_iter(r) {
+                let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
+                match hex_data {
+                    Some(HexData {
+                        state: HexState::Open(..),
+                        ..
+                    }) => return Some(pos),
+                    Some(..) => end = false,
+                    None => (),
+                }
+            }
+            if end {
+                return None;
+            }
+            r += 1;
         }
     }
 
     pub fn create_pointer(
         &mut self,
-        _fov_state: FovState,
+        fov_state: FovState,
         data: &mut StateData<'_, GameData<'_, '_>>,
     ) {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.delete_pointer(data, &world);
 
-        // TODO
+        if let Some(hex) = self.find_open_hex() {
+            let mut pointer = HexPointer::new_with_level_height(1.0);
+            pointer.set_position(hex, 0, data, &world);
+            pointer.create_entities(data, &world);
+            self.pointer = Some((pointer, fov_state));
+            self.renderer_dirty = true;
+        }
     }
 
-    pub fn update_renderer_world(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn increment_direction(&mut self, data: &StateData<'_, GameData<'_, '_>>) {
+        if let Some((pointer, _)) = &mut self.pointer {
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+            pointer.increment_direction(data, &world);
+        }
+    }
+
+    pub fn decrement_direction(&mut self, data: &StateData<'_, GameData<'_, '_>>) {
+        if let Some((pointer, _)) = &mut self.pointer {
+            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+            pointer.decrement_direction(data, &world);
+        }
+    }
+
+    pub fn next_position(&mut self, mode: MoveMode, data: &mut StateData<'_, GameData<'_, '_>>) {
+        if let Some((pointer, _)) = &mut self.pointer {
+            let direction = match mode {
+                MoveMode::StraightAhead => pointer.direction(),
+                MoveMode::StrafeLeftAhead => (pointer.direction() + 5) % 6,
+                MoveMode::StrafeLeftBack => (pointer.direction() + 4) % 6,
+                MoveMode::StrafeRightAhead => (pointer.direction() + 1) % 6,
+                MoveMode::StrafeRightBack => (pointer.direction() + 2) % 6,
+                MoveMode::StraightBack => (pointer.direction() + 3) % 6,
+            };
+            let next = pointer.position().neighbor(direction);
+            if let Some(HexData {
+                state: HexState::Open(..),
+                ..
+            }) = self.hexes.get(next).map(|hex| &hex.0)
+            {
+                let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
+                pointer.set_position(next, 0, data, &world);
+                self.renderer_dirty = true;
+            }
+        }
+    }
+
+    pub fn change_field_of_view(&mut self, fov_state: FovState) {
+        if let Some((_, pointer_fov_state)) = &mut self.pointer {
+            *pointer_fov_state = fov_state;
+            self.renderer_dirty = true;
+        }
+    }
+
+    pub fn update_renderer_world(
+        &mut self,
+        force: bool,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+    ) {
         if !self.renderer_dirty {
             return;
         }
@@ -629,7 +721,7 @@ impl<R: HexRenderer> World<R> {
             },
             |hex| &mut hex.1,
             visible_only,
-            false,
+            force,
             data,
             &world,
         );

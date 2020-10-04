@@ -1,8 +1,7 @@
 use crate::{
     hex::{
-        cellular::world::{
-            new_area_renderer, new_edge_renderer, new_tile_renderer, FovState, MoveMode, World,
-        },
+        cellular::world::{FovState, MoveMode, World},
+        new_area_renderer, new_edge_renderer, new_tile_renderer,
         render::{
             area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
         },

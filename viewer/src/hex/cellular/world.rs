@@ -2,12 +2,7 @@ use crate::{
     dispose::Dispose,
     hex::{
         pointer::HexPointer,
-        render::{
-            area::AreaRenderer,
-            edge::EdgeRenderer,
-            renderer::HexRenderer,
-            tile::{HexScale, TileRenderer},
-        },
+        render::renderer::HexRenderer,
         shape::cubic_range::{CubicRangeShape, Range},
     },
     world::RhombusViewerWorld,
@@ -24,32 +19,6 @@ use rhombus_core::hex::{
     storage::hash::RectHashStorage,
 };
 use std::{collections::HashSet, sync::Arc};
-
-const HEX_SCALE_HORIZONTAL: f32 = 0.8;
-const GROUND_HEX_SCALE_VERTICAL: f32 = 0.1;
-const WALL_HEX_SCALE_VERTICAL: f32 = 1.0;
-
-pub fn new_tile_renderer() -> TileRenderer {
-    TileRenderer::new(
-        HexScale {
-            horizontal: HEX_SCALE_HORIZONTAL,
-            vertical: GROUND_HEX_SCALE_VERTICAL,
-        },
-        HexScale {
-            horizontal: HEX_SCALE_HORIZONTAL,
-            vertical: WALL_HEX_SCALE_VERTICAL,
-        },
-        0,
-    )
-}
-
-pub fn new_edge_renderer() -> EdgeRenderer {
-    EdgeRenderer::new()
-}
-
-pub fn new_area_renderer() -> AreaRenderer {
-    AreaRenderer::new()
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HexState {
