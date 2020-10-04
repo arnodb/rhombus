@@ -137,6 +137,7 @@ impl<R: HexRenderer> World<R> {
         self.rooms.clear();
         self.renderer.clear(data);
         self.hexes.dispose(data);
+        self.next_region = 0;
     }
 
     fn delete_pointer(
@@ -417,6 +418,8 @@ impl<R: HexRenderer> World<R> {
                 .count()
                 >= 2
         });
+
+        self.renderer_dirty = true;
 
         return false;
     }
