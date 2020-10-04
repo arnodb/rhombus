@@ -1,5 +1,70 @@
 use std::mem::MaybeUninit;
 
+pub struct HexWithAdjacents<'a, H, A> {
+    hex: H,
+    option_bits: u8,
+    adjacents: [MaybeUninit<&'a A>; 6],
+}
+
+impl<'a, H, A> HexWithAdjacents<'a, H, A> {
+    pub fn new(
+        hex: H,
+        adj_0: Option<&'a A>,
+        adj_1: Option<&'a A>,
+        adj_2: Option<&'a A>,
+        adj_3: Option<&'a A>,
+        adj_4: Option<&'a A>,
+        adj_5: Option<&'a A>,
+    ) -> Self {
+        let mut option_bits = 0;
+        let mut adjacents = unsafe { MaybeUninit::<[MaybeUninit<&A>; 6]>::uninit().assume_init() };
+        let mut write = |offset: usize, hex: Option<&'a A>| {
+            if let Some(h) = hex {
+                option_bits |= 1 << offset;
+                unsafe {
+                    std::ptr::write(adjacents[offset].as_mut_ptr(), h);
+                }
+            }
+        };
+        write(0, adj_0);
+        write(1, adj_1);
+        write(2, adj_2);
+        write(3, adj_3);
+        write(4, adj_4);
+        write(5, adj_5);
+        Self {
+            hex,
+            option_bits,
+            adjacents,
+        }
+    }
+
+    pub fn hex(&self) -> &H {
+        &self.hex
+    }
+
+    pub fn adjacent(&self, direction: usize) -> Option<&A> {
+        if direction > 5 {
+            panic!("Direction out of bound");
+        }
+        if self.option_bits & 1 << direction != 0 {
+            Some(unsafe { &*self.adjacents[direction].as_ptr() })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, H, A> HexWithAdjacents<'a, Option<H>, A> {
+    pub fn unwrap(self) -> HexWithAdjacents<'a, H, A> {
+        HexWithAdjacents {
+            hex: self.hex.unwrap(),
+            option_bits: self.option_bits,
+            adjacents: self.adjacents,
+        }
+    }
+}
+
 pub struct HexWithAdjacentsMut<'a, H, A> {
     hex: H,
     option_bits: u8,

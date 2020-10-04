@@ -2,7 +2,7 @@ use crate::{
     hex::{
         coordinates::{axial::AxialVector, direction::HexagonalDirection},
         storage::{
-            adjacent::HexWithAdjacentsMut,
+            adjacent::{HexWithAdjacents, HexWithAdjacentsMut},
             rect::{
                 RectEntry, RectOccupiedEntry, RectStorage, RectVacantEntry, RECT_X_LEN, RECT_Y_LEN,
             },
@@ -107,6 +107,20 @@ impl<H> RectHashStorage<H> {
         self.rects.values_mut().flat_map(|rect| rect.hexes_mut())
     }
 
+    pub fn positions_and_hexes_with_adjacents<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (AxialVector, HexWithAdjacents<'a, &'a H, H>)> {
+        self.rects.iter().flat_map(move |(rect_origin, rect)| {
+            rect.positions().map(move |(x, y)| {
+                let position = AxialVector::new(
+                    rect_origin.x * RECT_X_LEN as isize + x as isize,
+                    rect_origin.y * RECT_Y_LEN as isize + y as isize,
+                );
+                (position, self.hex_with_adjacents(position).unwrap())
+            })
+        })
+    }
+
     pub fn positions_and_hexes_with_adjacents_mut<'a>(
         &'a mut self,
     ) -> impl Iterator<Item = (AxialVector, HexWithAdjacentsMut<'a, &'a mut H, H>)> {
@@ -125,6 +139,43 @@ impl<H> RectHashStorage<H> {
                 )
             })
         })
+    }
+
+    fn hex_with_adjacents(&self, position: AxialVector) -> HexWithAdjacents<Option<&H>, H> {
+        let mut rects_len = 0;
+        let mut rects: [(Vector2ISize, Option<&RectStorage<H>>); 4] = Default::default();
+        let mut get = |pos: AxialVector| -> Option<&H> {
+            let x = pos.q().div_euclid(RECT_X_LEN as isize);
+            let y = pos.r().div_euclid(RECT_Y_LEN as isize);
+            let rect_pos = Vector2ISize { x, y };
+            let mut index = 0;
+            while index < rects_len && rects[index].0 != rect_pos {
+                index += 1;
+            }
+            if index >= rects_len {
+                if index < rects.len() {
+                    rects[index] = (rect_pos, self.rects.get(&rect_pos));
+                    rects_len += 1;
+                } else {
+                    unreachable!();
+                }
+            }
+            rects[index].1.and_then(|rect| {
+                rect.get(
+                    pos.q().rem_euclid(RECT_X_LEN as isize) as usize,
+                    pos.r().rem_euclid(RECT_Y_LEN as isize) as usize,
+                )
+            })
+        };
+        HexWithAdjacents::new(
+            get(position),
+            get(position + AxialVector::direction(0)),
+            get(position + AxialVector::direction(1)),
+            get(position + AxialVector::direction(2)),
+            get(position + AxialVector::direction(3)),
+            get(position + AxialVector::direction(4)),
+            get(position + AxialVector::direction(5)),
+        )
     }
 
     fn hex_with_adjacents_mut(

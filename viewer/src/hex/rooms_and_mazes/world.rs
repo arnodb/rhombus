@@ -17,11 +17,12 @@ use rhombus_core::hex::{
     field_of_view::FieldOfView,
     storage::hash::RectHashStorage,
 };
+use smallvec::SmallVec;
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HexState {
-    Open,
+    Open(usize),
     Wall,
 }
 
@@ -42,6 +43,7 @@ pub struct World<R: HexRenderer> {
     renderer: R,
     renderer_dirty: bool,
     rooms: Vec<CubicRangeShape>,
+    next_region: usize,
     pointer: Option<(HexPointer, FovState)>,
 }
 
@@ -54,6 +56,7 @@ impl<R: HexRenderer> World<R> {
             renderer,
             renderer_dirty: false,
             rooms: Vec::new(),
+            next_region: 0,
             pointer: None,
         }
     }
@@ -229,7 +232,8 @@ impl<R: HexRenderer> World<R> {
                 let mut end = true;
                 for pos in new_room.center().ring_iter(r) {
                     if new_room.contains_position(pos) {
-                        self.hexes.get_mut(pos).expect("new room cell").0.state = HexState::Open;
+                        self.hexes.get_mut(pos).expect("new room cell").0.state =
+                            HexState::Open(self.next_region);
                         end = false;
                     }
                 }
@@ -241,6 +245,8 @@ impl<R: HexRenderer> World<R> {
 
             self.rooms.push(new_room);
 
+            self.next_region += 1;
+
             self.renderer_dirty = true;
         }
     }
@@ -249,6 +255,7 @@ impl<R: HexRenderer> World<R> {
         MazeState {
             next_pos: 0,
             cells: Vec::new(),
+            region: 0,
         }
     }
 
@@ -263,6 +270,8 @@ impl<R: HexRenderer> World<R> {
                         if self.can_carve(cell) {
                             state.next_pos = pos + 1;
                             state.cells.push((cell, None));
+                            state.region = self.next_region;
+                            self.next_region += 1;
                             break;
                         } else {
                             pos += 1;
@@ -275,9 +284,11 @@ impl<R: HexRenderer> World<R> {
             if let Some((cell, via)) = state.cells.pop() {
                 if self.can_carve(cell) {
                     if let Some(via) = via {
-                        self.hexes.get_mut(via).expect("via cell").0.state = HexState::Open;
+                        self.hexes.get_mut(via).expect("via cell").0.state =
+                            HexState::Open(state.region);
                     }
-                    self.hexes.get_mut(cell).expect("carve cell").0.state = HexState::Open;
+                    self.hexes.get_mut(cell).expect("carve cell").0.state =
+                        HexState::Open(state.region);
                     self.renderer_dirty = true;
                     let mut directions = Vec::new();
                     for dir in 0..NUM_DIRECTIONS {
@@ -326,6 +337,90 @@ impl<R: HexRenderer> World<R> {
                 .map_or(false, |(data, _)| data.state == HexState::Wall)
     }
 
+    pub fn start_connect(&self) -> ConnectState {
+        if self.next_region <= 1 {
+            return ConnectState {
+                connectors: Vec::new(),
+                regions_to_connect: HashSet::new(),
+            };
+        }
+        let connectors = self
+            .hexes
+            .positions_and_hexes_with_adjacents()
+            .filter_map(|(pos, hex_with_adjacents)| {
+                if hex_with_adjacents.hex().0.state != HexState::Wall {
+                    return None;
+                }
+                let mut regions: SmallVec<[usize; 3]> = (0..NUM_DIRECTIONS)
+                    .filter_map(|dir| {
+                        hex_with_adjacents.adjacent(dir).map_or(None, |(data, _)| {
+                            match data.state {
+                                HexState::Open(region) => Some(region),
+                                HexState::Wall => None,
+                            }
+                        })
+                    })
+                    .collect();
+                regions.sort();
+                regions.dedup();
+                debug_assert!(regions.len() <= 3);
+                if regions.len() > 1 {
+                    Some((pos, regions))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut rng = thread_rng();
+        let first_region = rng.gen_range(0, self.next_region);
+        let regions_to_connect = (0..self.next_region)
+            .filter(|region| *region != first_region)
+            .collect();
+        ConnectState {
+            connectors,
+            regions_to_connect,
+        }
+    }
+
+    pub fn connect(&mut self, state: &mut ConnectState) -> bool {
+        if state.regions_to_connect.is_empty() {
+            return true;
+        }
+        let indices = state
+            .connectors
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, connector_regions))| {
+                let one_in = connector_regions
+                    .iter()
+                    .any(|cr| !state.regions_to_connect.contains(cr));
+                let one_out = connector_regions
+                    .iter()
+                    .any(|cr| state.regions_to_connect.contains(cr));
+                if one_in && one_out { Some(index) } else { None }
+            })
+            .collect::<Vec<usize>>();
+
+        let mut rng = thread_rng();
+
+        let (pos, regions) = &state.connectors[indices[rng.gen_range(0, indices.len())]];
+
+        self.hexes.get_mut(*pos).expect("connector cell").0.state = HexState::Open(0);
+        for r in regions {
+            state.regions_to_connect.remove(r);
+        }
+        let connected_regions = regions.clone();
+        state.connectors.drain_filter(|(_, connector_regions)| {
+            connector_regions
+                .iter()
+                .filter(|r1| connected_regions.iter().any(|r2| *r1 == r2))
+                .count()
+                >= 2
+        });
+
+        return false;
+    }
+
     pub fn create_pointer(
         &mut self,
         _fov_state: FovState,
@@ -351,7 +446,7 @@ impl<R: HexRenderer> World<R> {
                 let hex_data = self.hexes.get(pos).map(|hex| &hex.0);
                 match hex_data {
                     Some(HexData {
-                        state: HexState::Open,
+                        state: HexState::Open(..),
                         ..
                     }) => false,
                     Some(HexData {
@@ -390,7 +485,7 @@ impl<R: HexRenderer> World<R> {
 
         self.renderer.update_world(
             &mut self.hexes,
-            |_, hex| hex.0.state != HexState::Open,
+            |_, hex| !matches!(hex.0.state, HexState::Open(..)),
             |pos, _| {
                 visible_positions
                     .as_ref()
@@ -411,4 +506,11 @@ impl<R: HexRenderer> World<R> {
 pub struct MazeState {
     next_pos: usize,
     cells: Vec<(AxialVector, Option<AxialVector>)>,
+    region: usize,
+}
+
+#[derive(Debug)]
+pub struct ConnectState {
+    connectors: Vec<(AxialVector, SmallVec<[usize; 3]>)>,
+    regions_to_connect: HashSet<usize>,
 }
