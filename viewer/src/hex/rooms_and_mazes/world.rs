@@ -284,7 +284,7 @@ impl<R: HexRenderer> World<R> {
             }
             if let Some((cell, via)) = state.cells.pop() {
                 if self.can_carve(cell) {
-                    if let Some(via) = via {
+                    if let Some((via, _)) = via {
                         self.hexes.get_mut(via).expect("via cell").0.state =
                             HexState::Open(state.region);
                     }
@@ -292,25 +292,39 @@ impl<R: HexRenderer> World<R> {
                         HexState::Open(state.region);
                     self.renderer_dirty = true;
                     let mut directions = Vec::new();
+                    let mut wind_d = None;
                     for dir in 0..NUM_DIRECTIONS {
                         let neighbour = cell + AxialVector::direction(dir) * 2;
                         if self.can_carve(neighbour) {
+                            if let Some((_, wind_dir)) = via {
+                                if wind_dir == dir {
+                                    wind_d = Some(directions.len())
+                                }
+                            }
                             directions.push(dir);
                         }
                     }
+                    if !directions.is_empty() && wind_d.is_some() {
+                        debug_assert_eq!(directions[wind_d.unwrap()], via.unwrap().1);
+                    }
                     if !directions.is_empty() {
-                        let d = rng.gen_range(0, directions.len());
+                        let d = wind_d
+                            .and_then(|d| {
+                                let windy = rng.gen_bool(0.6);
+                                if windy { Some(d) } else { None }
+                            })
+                            .unwrap_or_else(|| rng.gen_range(0, directions.len()));
                         let dir = directions[d];
-                        let via = cell + AxialVector::direction(dir);
-                        let neighbour = cell + AxialVector::direction(dir) * 2;
-                        state.cells.push((neighbour, Some(via)));
                         for (i, dir) in directions.into_iter().enumerate() {
                             if i != d {
                                 let via = cell + AxialVector::direction(dir);
                                 let neighbour = cell + AxialVector::direction(dir) * 2;
-                                state.cells.push((neighbour, Some(via)));
+                                state.cells.push((neighbour, Some((via, dir))));
                             }
                         }
+                        let via = cell + AxialVector::direction(dir);
+                        let neighbour = cell + AxialVector::direction(dir) * 2;
+                        state.cells.push((neighbour, Some((via, dir))));
                     }
                     return false;
                 }
@@ -627,7 +641,7 @@ impl<R: HexRenderer> World<R> {
 #[derive(Debug)]
 pub struct MazeState {
     next_pos: usize,
-    cells: Vec<(AxialVector, Option<AxialVector>)>,
+    cells: Vec<(AxialVector, Option<(AxialVector, usize)>)>,
     region: usize,
 }
 
