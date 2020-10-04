@@ -203,8 +203,8 @@ impl<R: HexRenderer> World<R> {
             }
         }
 
-        let random_pos: CubicVector =
-            (*&self.shape_positions[rng.gen_range(0, self.shape_positions.len())]).into();
+        let random_pos =
+            CubicVector::from(self.shape_positions[rng.gen_range(0, self.shape_positions.len())]);
 
         let mut start_x = new_room.range_x().start() + random_pos.x();
         let delta_x = (start_x - self.shape.range_x().start() + 1) % 2;
@@ -318,7 +318,7 @@ impl<R: HexRenderer> World<R> {
                 break;
             }
         }
-        return true;
+        true
     }
 
     fn can_carve(&self, position: AxialVector) -> bool {
@@ -354,12 +354,12 @@ impl<R: HexRenderer> World<R> {
                 }
                 let mut regions: SmallVec<[usize; 3]> = (0..NUM_DIRECTIONS)
                     .filter_map(|dir| {
-                        hex_with_adjacents.adjacent(dir).map_or(None, |(data, _)| {
-                            match data.state {
+                        hex_with_adjacents
+                            .adjacent(dir)
+                            .and_then(|(data, _)| match data.state {
                                 HexState::Open(region) => Some(region),
                                 HexState::Wall => None,
-                            }
-                        })
+                            })
                     })
                     .collect();
                 regions.sort();
@@ -430,7 +430,90 @@ impl<R: HexRenderer> World<R> {
 
         self.renderer_dirty = true;
 
-        return false;
+        false
+    }
+
+    pub fn start_remove_dead_ends(&self) -> RemoveDeadEndsState {
+        RemoveDeadEndsState {
+            tests: self
+                .hexes
+                .positions()
+                .filter(|pos| {
+                    let cubic = CubicVector::from(*pos);
+                    ((cubic.x() - self.shape.range_x().start()) % 2 == 1)
+                        && ((cubic.z() - self.shape.range_z().start()) % 2 == 1)
+                })
+                .collect(),
+            next: 0,
+            redo_tests: Vec::new(),
+        }
+    }
+
+    pub fn remove_dead_ends(&mut self, state: &mut RemoveDeadEndsState) -> bool {
+        loop {
+            while state.next < state.tests.len() {
+                let pos = state.tests[state.next];
+                state.next += 1;
+                let hex = self.hexes.get(pos);
+                if let Some((
+                    HexData {
+                        state: HexState::Open(..),
+                    },
+                    _,
+                )) = hex
+                {
+                } else {
+                    continue;
+                }
+                let mut redo = SmallVec::<[usize; NUM_DIRECTIONS]>::new();
+                for dir in 0..NUM_DIRECTIONS {
+                    let via = self.hexes.get(pos + AxialVector::direction(dir));
+                    let adj = self.hexes.get(pos + AxialVector::direction(dir) * 2);
+                    if let (
+                        Some((
+                            HexData {
+                                state: HexState::Open(..),
+                            },
+                            _,
+                        )),
+                        Some((
+                            HexData {
+                                state: HexState::Open(..),
+                            },
+                            _,
+                        )),
+                    ) = (via, adj)
+                    {
+                        redo.push(dir);
+                    }
+                }
+                if redo.len() <= 1 {
+                    state.redo_tests.extend(
+                        redo.into_iter()
+                            .map(|dir| pos + AxialVector::direction(dir) * 2),
+                    );
+                    let mut haa = self.hexes.hex_with_adjacents_mut(pos);
+                    haa.hex().as_mut().expect("dead end cell").0.state = HexState::Wall;
+                    for dir in 0..NUM_DIRECTIONS {
+                        if let Some(adj) = haa.adjacent(dir) {
+                            if let HexState::Open(..) = adj.0.state {
+                                adj.0.state = HexState::Wall;
+                            }
+                        };
+                    }
+                    self.renderer_dirty = true;
+                    return false;
+                }
+            }
+            if !state.redo_tests.is_empty() {
+                std::mem::swap(&mut state.tests, &mut state.redo_tests);
+                state.redo_tests.clear();
+                state.next = 0;
+            } else {
+                break;
+            }
+        }
+        true
     }
 
     pub fn create_pointer(
@@ -525,4 +608,11 @@ pub struct MazeState {
 pub struct ConnectState {
     connectors: Vec<(AxialVector, SmallVec<[usize; 3]>)>,
     regions_to_connect: HashSet<usize>,
+}
+
+#[derive(Debug)]
+pub struct RemoveDeadEndsState {
+    tests: Vec<AxialVector>,
+    next: usize,
+    redo_tests: Vec<AxialVector>,
 }

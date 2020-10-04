@@ -141,7 +141,7 @@ impl<H> RectHashStorage<H> {
         })
     }
 
-    fn hex_with_adjacents(&self, position: AxialVector) -> HexWithAdjacents<Option<&H>, H> {
+    pub fn hex_with_adjacents(&self, position: AxialVector) -> HexWithAdjacents<Option<&H>, H> {
         let mut rects_len = 0;
         let mut rects: [(Vector2ISize, Option<&RectStorage<H>>); 4] = Default::default();
         let mut get = |pos: AxialVector| -> Option<&H> {
@@ -178,7 +178,7 @@ impl<H> RectHashStorage<H> {
         )
     }
 
-    fn hex_with_adjacents_mut(
+    pub fn hex_with_adjacents_mut(
         &mut self,
         position: AxialVector,
     ) -> HexWithAdjacentsMut<Option<&mut H>, H> {

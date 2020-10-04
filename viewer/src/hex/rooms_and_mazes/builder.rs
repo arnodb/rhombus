@@ -2,7 +2,7 @@ use crate::{
     hex::{
         cellular::world::FovState,
         render::tile::{HexScale, TileRenderer},
-        rooms_and_mazes::world::{ConnectState, MazeState, World},
+        rooms_and_mazes::world::{ConnectState, MazeState, RemoveDeadEndsState, World},
         shape::cubic_range::CubicRangeShape,
     },
     input::get_key_and_modifiers,
@@ -20,6 +20,7 @@ enum BuilderState {
     Rooms(usize),
     Maze(MazeState),
     Connect(ConnectState),
+    RemoveDeadEnds(RemoveDeadEndsState),
     Grown,
     FieldOfView(bool),
 }
@@ -133,6 +134,12 @@ impl SimpleState for HexRoomsAndMazesBuilder {
                 }
                 BuilderState::Connect(state) => {
                     if self.world.connect(state) {
+                        self.state =
+                            BuilderState::RemoveDeadEnds(self.world.start_remove_dead_ends());
+                    }
+                }
+                BuilderState::RemoveDeadEnds(state) => {
+                    if self.world.remove_dead_ends(state) {
                         self.state = BuilderState::Grown;
                     }
                 }
