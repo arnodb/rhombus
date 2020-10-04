@@ -411,13 +411,17 @@ impl<R: HexRenderer> World<R> {
             state.regions_to_connect.remove(r);
         }
         let connected_regions = regions.clone();
-        for (pos, _) in state.connectors.drain_filter(|(_, connector_regions)| {
+        let mut connectors = Vec::new();
+        std::mem::swap(&mut state.connectors, &mut connectors);
+        let (drained, remaining) = connectors.into_iter().partition(|(_, connector_regions)| {
             connector_regions
                 .iter()
                 .filter(|r1| connected_regions.iter().any(|r2| *r1 == r2))
                 .count()
                 >= 2
-        }) {
+        });
+        state.connectors = remaining;
+        for (pos, _) in drained {
             let carve = rng.gen_range(0, 50) == 0;
             if carve {
                 self.hexes.get_mut(pos).expect("connector cell").0.state = HexState::Open(0);
