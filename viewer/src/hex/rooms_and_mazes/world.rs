@@ -516,6 +516,33 @@ impl<R: HexRenderer> World<R> {
         true
     }
 
+    pub fn clean_walls(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+        let mut remove = Vec::new();
+        for (pos, haa) in self.hexes.positions_and_hexes_with_adjacents() {
+            let mut keep = false;
+            for dir in 0..NUM_DIRECTIONS {
+                if let Some((
+                    HexData {
+                        state: HexState::Open(..),
+                    },
+                    _,
+                )) = haa.adjacent(dir)
+                {
+                    keep = true;
+                    break;
+                }
+            }
+            if !keep {
+                remove.push(pos);
+            }
+        }
+        if !remove.is_empty() {
+            for pos in remove {
+                self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
+            }
+        }
+    }
+
     pub fn create_pointer(
         &mut self,
         _fov_state: FovState,

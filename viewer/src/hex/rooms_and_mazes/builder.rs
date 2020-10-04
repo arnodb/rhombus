@@ -140,6 +140,7 @@ impl SimpleState for HexRoomsAndMazesBuilder {
                 }
                 BuilderState::RemoveDeadEnds(state) => {
                     if self.world.remove_dead_ends(state) {
+                        self.world.clean_walls(data);
                         self.state = BuilderState::Grown;
                     }
                 }
