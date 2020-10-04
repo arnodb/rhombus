@@ -118,7 +118,7 @@ impl SimpleState for HexRoomsAndMazesBuilder {
         for _ in 0..num {
             match &mut self.state {
                 BuilderState::Rooms(countdown) => {
-                    self.world.add_room(data);
+                    self.world.add_room();
                     self.state = if *countdown > 1 {
                         BuilderState::Rooms(*countdown - 1)
                     } else {

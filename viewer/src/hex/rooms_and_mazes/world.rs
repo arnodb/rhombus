@@ -6,11 +6,7 @@ use crate::{
     },
     world::RhombusViewerWorld,
 };
-use amethyst::{
-    ecs::prelude::*,
-    prelude::*,
-    renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
-};
+use amethyst::{ecs::prelude::*, prelude::*};
 use rand::{thread_rng, Rng};
 use rhombus_core::hex::{
     coordinates::{
@@ -45,8 +41,7 @@ pub struct World<R: HexRenderer> {
     hexes: RectHashStorage<(HexData, R::Hex)>,
     renderer: R,
     renderer_dirty: bool,
-    limits_entity: Option<Entity>,
-    rooms: Vec<(CubicRangeShape, Entity)>,
+    rooms: Vec<CubicRangeShape>,
     pointer: Option<(HexPointer, FovState)>,
 }
 
@@ -58,7 +53,6 @@ impl<R: HexRenderer> World<R> {
             hexes: RectHashStorage::new(),
             renderer,
             renderer_dirty: false,
-            limits_entity: None,
             rooms: Vec::new(),
             pointer: None,
         }
@@ -106,27 +100,6 @@ impl<R: HexRenderer> World<R> {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         self.clear(data, &world);
 
-        if let Some(entity) = self.limits_entity {
-            let mut debug_lines_storage = data.world.write_storage::<DebugLinesComponent>();
-            let debug_lines = debug_lines_storage.get_mut(entity).expect("Debug lines");
-            debug_lines.clear();
-            Self::add_limit_lines(
-                &self.shape,
-                Srgba::new(0.2, 0.2, 0.2, 1.0),
-                debug_lines,
-                &world,
-            );
-        } else {
-            let mut debug_lines = DebugLinesComponent::with_capacity(6);
-            Self::add_limit_lines(
-                &self.shape,
-                Srgba::new(0.2, 0.2, 0.2, 1.0),
-                &mut debug_lines,
-                &world,
-            );
-            self.limits_entity = Some(data.world.create_entity().with(debug_lines).build());
-        }
-
         for v in &self.shape_positions {
             self.hexes.insert(
                 *v,
@@ -158,13 +131,7 @@ impl<R: HexRenderer> World<R> {
         world: &RhombusViewerWorld,
     ) {
         self.delete_pointer(data, world);
-        for (_, entity) in self.rooms.iter() {
-            data.world.delete_entity(*entity).expect("delete entity");
-        }
         self.rooms.clear();
-        if let Some(entity) = self.limits_entity.take() {
-            data.world.delete_entity(entity).expect("delete entity");
-        }
         self.renderer.clear(data);
         self.hexes.dispose(data);
     }
@@ -179,26 +146,7 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    fn add_limit_lines(
-        shape: &CubicRangeShape,
-        color: Srgba,
-        debug_lines: &mut DebugLinesComponent,
-        world: &RhombusViewerWorld,
-    ) {
-        let translations = shape
-            .vertices()
-            .iter()
-            .map(|v| world.axial_translation((*v, 2.0).into()))
-            .collect::<Vec<[f32; 3]>>();
-        debug_lines.add_line(translations[0].into(), translations[1].into(), color);
-        debug_lines.add_line(translations[1].into(), translations[2].into(), color);
-        debug_lines.add_line(translations[2].into(), translations[3].into(), color);
-        debug_lines.add_line(translations[3].into(), translations[4].into(), color);
-        debug_lines.add_line(translations[4].into(), translations[5].into(), color);
-        debug_lines.add_line(translations[5].into(), translations[0].into(), color);
-    }
-
-    pub fn add_room(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
+    pub fn add_room(&mut self) {
         let mut deltas = [
             self.shape.range_x().end() - self.shape.range_x().start(),
             self.shape.range_y().end() - self.shape.range_y().start(),
@@ -275,22 +223,7 @@ impl<R: HexRenderer> World<R> {
             && self.shape.range_z().end() > end_z;
         let new_room = CubicRangeShape::new((start_x, end_x), (start_y, end_y), (start_z, end_z));
 
-        if is_inside_shape
-            && !self
-                .rooms
-                .iter()
-                .any(|(room, _)| room.intersects(&new_room))
-        {
-            let mut debug_lines = DebugLinesComponent::with_capacity(6);
-            let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
-            Self::add_limit_lines(
-                &new_room,
-                Srgba::new(0.5, 0.5, 0.5, 1.0),
-                &mut debug_lines,
-                &world,
-            );
-            let new_entity = data.world.create_entity().with(debug_lines).build();
-
+        if is_inside_shape && !self.rooms.iter().any(|room| room.intersects(&new_room)) {
             let mut r = 0;
             loop {
                 let mut end = true;
@@ -306,7 +239,7 @@ impl<R: HexRenderer> World<R> {
                 r += 1;
             }
 
-            self.rooms.push((new_room, new_entity));
+            self.rooms.push(new_room);
 
             self.renderer_dirty = true;
         }
