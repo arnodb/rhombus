@@ -1,5 +1,8 @@
-use crate::{dispose::Dispose, hex::render::renderer::HexRenderer, world::RhombusViewerWorld};
+use crate::{
+    assets::Color, dispose::Dispose, hex::render::renderer::HexRenderer, world::RhombusViewerWorld,
+};
 use amethyst::{
+    core::{math::Vector3, Transform},
     ecs::prelude::*,
     prelude::*,
     renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
@@ -27,6 +30,7 @@ impl Dispose for Hex {
 
 pub struct EdgeRenderer {
     cell_radius: usize,
+    plane: Option<Entity>,
     entity: Option<Entity>,
     previous_visible_only: bool,
 }
@@ -35,8 +39,40 @@ impl EdgeRenderer {
     pub fn new() -> Self {
         Self {
             cell_radius: 1,
+            plane: None,
             entity: None,
             previous_visible_only: false,
+        }
+    }
+
+    fn get_color(hex: &Hex, edge: Edge) -> Option<Srgba> {
+        match (hex.visible, edge) {
+            (false, Edge::Void) => None,
+            (false, Edge::DecreaseAltitude) => Some(Srgba::new(0.5, 0.0, 0.0, 1.0)),
+            (false, Edge::SameAltitude) => {
+                if hex.wall {
+                    Some(Srgba::new(0.15, 0.0, 0.0, 1.0))
+                } else {
+                    Some(Srgba::new(0.1, 0.1, 0.1, 1.0))
+                }
+            }
+            (false, Edge::IncreaseAltitude) => Some(Srgba::new(0.3, 0.3, 0.3, 1.0)),
+            (true, Edge::Void) => {
+                if hex.wall {
+                    None
+                } else {
+                    Some(Srgba::new(0.0, 1.0, 1.0, 1.0))
+                }
+            }
+            (true, Edge::DecreaseAltitude) => Some(Srgba::new(1.0, 0.0, 0.0, 1.0)),
+            (true, Edge::SameAltitude) => {
+                if hex.wall {
+                    Some(Srgba::new(0.3, 0.0, 0.0, 1.0))
+                } else {
+                    Some(Srgba::new(0.5, 0.5, 0.0, 1.0))
+                }
+            }
+            (true, Edge::IncreaseAltitude) => Some(Srgba::new(0.8, 0.8, 0.0, 1.0)),
         }
     }
 
@@ -63,55 +99,6 @@ impl EdgeRenderer {
             }
             let translation = world.axial_translation((position, 0.0).into());
             let small = 3.0_f32.sqrt() / 2.0;
-            let color_factor = if hex.visible { 1.0 } else { 0.5 };
-            let color = |edge: Edge| match edge {
-                Edge::Void => {
-                    if hex.wall {
-                        Srgba::new(
-                            1.0 * color_factor,
-                            0.0 * color_factor,
-                            1.0 * color_factor,
-                            1.0,
-                        )
-                    } else {
-                        Srgba::new(
-                            0.0 * color_factor,
-                            1.0 * color_factor,
-                            1.0 * color_factor,
-                            1.0,
-                        )
-                    }
-                }
-                Edge::DecreaseAltitude => Srgba::new(
-                    1.0 * color_factor,
-                    0.0 * color_factor,
-                    0.0 * color_factor,
-                    1.0,
-                ),
-                Edge::SameAltitude => {
-                    if hex.wall {
-                        Srgba::new(
-                            0.3 * color_factor,
-                            0.0 * color_factor,
-                            0.0 * color_factor,
-                            1.0,
-                        )
-                    } else {
-                        Srgba::new(
-                            0.3 * color_factor,
-                            0.3 * color_factor,
-                            0.3 * color_factor,
-                            1.0,
-                        )
-                    }
-                }
-                Edge::IncreaseAltitude => Srgba::new(
-                    0.1 * color_factor,
-                    0.1 * color_factor,
-                    0.1 * color_factor,
-                    1.0,
-                ),
-            };
             for (dir, vertices, first_half) in [
                 (0, [(small, -0.5), (small, 0.5)], true),
                 (1, [(small, 0.5), (0.0, 1.0)], true),
@@ -123,21 +110,23 @@ impl EdgeRenderer {
             .iter()
             {
                 if *first_half || hex.edges[*dir] != Edge::SameAltitude {
-                    debug_lines.add_line(
-                        [
-                            translation[0] + vertices[0].0 * scale_factor,
-                            translation[1] + if hex.wall { 2.0 } else { 0.0 },
-                            translation[2] + vertices[0].1 * scale_factor,
-                        ]
-                        .into(),
-                        [
-                            translation[0] + vertices[1].0 * scale_factor,
-                            translation[1] + if hex.wall { 2.0 } else { 0.0 },
-                            translation[2] + vertices[1].1 * scale_factor,
-                        ]
-                        .into(),
-                        color(hex.edges[*dir]),
-                    );
+                    if let Some(color) = Self::get_color(hex, hex.edges[*dir]) {
+                        debug_lines.add_line(
+                            [
+                                translation[0] + vertices[0].0 * scale_factor,
+                                translation[1] + if hex.wall { 2.0 } else { 0.0 },
+                                translation[2] + vertices[0].1 * scale_factor,
+                            ]
+                            .into(),
+                            [
+                                translation[0] + vertices[1].0 * scale_factor,
+                                translation[1] + if hex.wall { 2.0 } else { 0.0 },
+                                translation[2] + vertices[1].1 * scale_factor,
+                            ]
+                            .into(),
+                            color,
+                        );
+                    }
                 }
             }
         }
@@ -175,6 +164,21 @@ impl HexRenderer for EdgeRenderer {
         Wall: Fn(AxialVector, &StorageHex) -> bool,
         Visible: Fn(AxialVector, &StorageHex) -> bool,
     {
+        if self.plane.is_none() {
+            let mut transform = Transform::default();
+            transform.set_translation_xyz(0.0, -1.0, 0.0);
+            transform.set_rotation_x_axis(-std::f32::consts::FRAC_PI_2);
+            transform.set_scale(Vector3::new(100.0, 100.0, 1.0));
+            self.plane = Some(
+                data.world
+                    .create_entity()
+                    .with(world.assets.plane_handle.clone())
+                    .with(world.assets.color_data[&Color::White].dark.clone())
+                    .with(transform)
+                    .build(),
+            )
+        }
+
         let mut dirty = self.entity.is_none() || self.previous_visible_only != visible_only;
         for (position, mut hex_with_adjacents) in hexes.positions_and_hexes_with_adjacents_mut() {
             let wall = is_wall_hex(position, hex_with_adjacents.hex());
@@ -233,6 +237,9 @@ impl HexRenderer for EdgeRenderer {
     fn clear(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         if let Some(entity) = self.entity.take() {
             data.world.delete_entity(entity).expect("delete entity");
+        }
+        if let Some(plane) = self.plane.take() {
+            data.world.delete_entity(plane).expect("delete entity");
         }
     }
 }

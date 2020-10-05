@@ -10,7 +10,11 @@ use amethyst::{
     },
     ecs::prelude::*,
     prelude::*,
-    renderer::Material,
+    renderer::{
+        light::{Light, PointLight},
+        palette::Srgb,
+        Material,
+    },
 };
 use rhombus_core::hex::coordinates::axial::AxialVector;
 
@@ -38,6 +42,7 @@ pub struct HexPointer {
     /* Display data */
     level_height: f32,
     entities: Option<HexPointerEntities>,
+    light: Option<Entity>,
 }
 
 struct HexPointerEntities {
@@ -75,11 +80,20 @@ impl HexPointer {
         self.position = position;
         self.height = height;
 
+        let mut transform_storage = data.world.write_storage::<Transform>();
+
         if let Some(entities) = &self.entities {
             if update_rot_trans {
-                let mut transform_storage = data.world.write_storage::<Transform>();
                 if let Some(transform) = transform_storage.get_mut(entities.pointer_rot_trans) {
                     self.set_pointer_rot_trans_transform(transform, world);
+                }
+            }
+        }
+
+        if let Some(light) = &self.light {
+            if update_rot_trans {
+                if let Some(transform) = transform_storage.get_mut(*light) {
+                    self.set_light_trans_transform(transform, world);
                 }
             }
         }
@@ -194,6 +208,9 @@ impl HexPointer {
         if self.entities.is_none() {
             self.entities = Some(self.create_pointer(data, world));
         }
+        if self.light.is_none() {
+            self.light = Some(self.create_light(data, world));
+        }
     }
 
     pub fn delete_entities(
@@ -209,6 +226,9 @@ impl HexPointer {
             data.world
                 .delete_entity(entities.pointer_rot_trans)
                 .expect("delete entity");
+        }
+        if let Some(light) = self.light.take() {
+            data.world.delete_entity(light).expect("delete entity");
         }
     }
 
@@ -244,6 +264,26 @@ impl HexPointer {
         }
     }
 
+    fn create_light(
+        &self,
+        data: &mut StateData<'_, GameData<'_, '_>>,
+        world: &RhombusViewerWorld,
+    ) -> Entity {
+        let mut light = PointLight::default();
+        light.color = Srgb::new(1.0, 1.0, 1.0);
+        light.intensity = 200.0;
+        let light = Light::from(light);
+
+        let mut transform = Transform::default();
+        self.set_light_trans_transform(&mut transform, world);
+
+        data.world
+            .create_entity()
+            .with(light)
+            .with(transform)
+            .build()
+    }
+
     fn set_pointer_rot_trans_transform(
         &self,
         transform: &mut Transform,
@@ -261,6 +301,11 @@ impl HexPointer {
                 transform.append_rotation_z_axis(std::f32::consts::PI / 10.0);
             }
         }
+    }
+
+    fn set_light_trans_transform(&self, transform: &mut Transform, world: &RhombusViewerWorld) {
+        let pos = (self.position, 10.0 + self.height as f32 * self.level_height).into();
+        world.transform_axial(pos, transform);
     }
 
     fn get_pointer_material(

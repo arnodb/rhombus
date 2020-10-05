@@ -42,10 +42,14 @@ use amethyst::{
         camera::Camera,
         debug_drawing::DebugLinesComponent,
         formats::mesh::ObjFormat,
-        light::{Light, PointLight},
+        light::{DirectionalLight, Light},
         palette::{Srgb, Srgba},
         plugins::{RenderDebugLines, RenderToWindow},
-        rendy::texture::palette::load_from_srgba,
+        rendy::{
+            mesh::{Normal, Position, TexCoord},
+            texture::palette::load_from_srgba,
+        },
+        shape::Shape,
         types::{DefaultBackend, Mesh, Texture},
         Material, MaterialDefaults, RenderShaded3D, RenderingBundle,
     },
@@ -53,7 +57,6 @@ use amethyst::{
     winit::VirtualKeyCode,
     Application, Error, GameDataBuilder, LoggerConfig, SimpleState, StateEvent,
 };
-use rhombus_core::hex::coordinates::axial::AxialVector;
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 use structopt::StructOpt;
 
@@ -167,6 +170,14 @@ impl SimpleState for RhombusViewer {
                 .build();
         }
         let assets = {
+            let plane_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
+                loader.load_from_data(
+                    Shape::Plane(None)
+                        .generate::<(Vec<TexCoord>, Vec<Normal>, Vec<Position>)>(None)
+                        .into(),
+                    &mut self.progress_counter,
+                )
+            });
             let hex_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
                 loader.load("mesh/hex.obj", ObjFormat, &mut self.progress_counter)
             });
@@ -218,6 +229,7 @@ impl SimpleState for RhombusViewer {
             .collect::<HashMap<_, _>>();
 
             RhombusViewerAssets {
+                plane_handle,
                 hex_handle,
                 dodec_handle,
                 pointer_handle,
@@ -225,35 +237,22 @@ impl SimpleState for RhombusViewer {
             }
         };
 
-        for r in 0..4 {
-            for pos in AxialVector::default()
-                .ring_iter(r * 24)
-                .step_by(if r != 0 { 24 } else { 1 })
-            {
-                let light: Light = PointLight {
-                    intensity: 30.0,
-                    color: Srgb::new(1.0, 1.0, 1.0),
-                    radius: 5.0,
-                    smoothness: 4.0,
-                }
-                .into();
+        for (intensity, direction_y) in [(0.3, -1.0), (0.15, 1.0)].iter() {
+            let mut light = DirectionalLight::default();
+            light.color = Srgb::new(1.0, 1.0, 1.0);
+            light.intensity = *intensity;
+            light.direction = Vector3::new(0.0, *direction_y, 0.0);
+            let light = Light::from(light);
 
-                let mut light_transform = Transform::default();
+            let mut light_transform = Transform::default();
 
-                let col = pos.q() + (pos.r() - (pos.r() & 1)) / 2;
-                let row = pos.r();
-                light_transform.set_translation_xyz(
-                    f32::sqrt(3.0) * ((col as f32) + (row & 1) as f32 / 2.0),
-                    10.0,
-                    -row as f32 * 1.5,
-                );
+            light_transform.set_translation_xyz(0.0, 10.0, 0.0);
 
-                data.world
-                    .create_entity()
-                    .with(light)
-                    .with(light_transform)
-                    .build();
-            }
+            data.world
+                .create_entity()
+                .with(light)
+                .with(light_transform)
+                .build();
         }
 
         // Origin with default orientation
