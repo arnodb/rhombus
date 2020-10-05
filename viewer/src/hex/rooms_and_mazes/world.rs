@@ -585,7 +585,11 @@ impl<R: HexRenderer> World<R> {
                         ..
                     }) => return Some(pos),
                     Some(..) => end = false,
-                    None => (),
+                    None => {
+                        if self.shape.contains_position(pos) {
+                            end = false
+                        }
+                    }
                 }
             }
             if end {
