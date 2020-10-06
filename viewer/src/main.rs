@@ -266,7 +266,7 @@ impl SimpleState for RhombusViewer {
         // Origin with camera orientation
         let mut origin_camera_transform = Transform::default();
         origin_camera_transform.append_rotation_y_axis(-std::f32::consts::PI / 2.0);
-        origin_camera_transform.append_rotation_x_axis(-std::f32::consts::PI / 10.0);
+        origin_camera_transform.append_rotation_x_axis(-std::f32::consts::PI / 5.0);
         let origin_camera = data
             .world
             .create_entity()

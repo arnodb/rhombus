@@ -114,13 +114,13 @@ impl EdgeRenderer {
                         debug_lines.add_line(
                             [
                                 translation[0] + vertices[0].0 * scale_factor,
-                                translation[1] + if hex.wall { 2.0 } else { 0.0 },
+                                translation[1] + if hex.wall { 1.0 } else { 0.0 },
                                 translation[2] + vertices[0].1 * scale_factor,
                             ]
                             .into(),
                             [
                                 translation[0] + vertices[1].0 * scale_factor,
-                                translation[1] + if hex.wall { 2.0 } else { 0.0 },
+                                translation[1] + if hex.wall { 1.0 } else { 0.0 },
                                 translation[2] + vertices[1].1 * scale_factor,
                             ]
                             .into(),

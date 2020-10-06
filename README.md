@@ -6,7 +6,9 @@
 
 Hexagonal and Rhombic Dodecahedral worlds project
 
-![Quadric directions](dodec-directions-small.png) ![Cellular cave generator](cellular-small.png)
+![Quadric directions](dodec-directions-small.png)
+
+![Cellular cave generator](cellular-small.png) ![Rooms and Mazes generator](rooms-and-mazes-small.png)
 
 ## Intention
 
