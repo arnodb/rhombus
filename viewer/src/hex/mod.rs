@@ -1,6 +1,7 @@
 use crate::hex::render::{
     area::AreaRenderer,
     edge::EdgeRenderer,
+    square::{SquareRenderer, SquareScale},
     tile::{HexScale, TileRenderer},
 };
 
@@ -29,6 +30,20 @@ pub fn new_tile_renderer() -> TileRenderer {
         HexScale {
             horizontal: HEX_SCALE_HORIZONTAL,
             vertical: WALL_HEX_SCALE_VERTICAL,
+        },
+        0,
+    )
+}
+
+const SQUARE_SCALE_HORIZONTAL: f32 = 0.7;
+
+pub fn new_square_renderer() -> SquareRenderer {
+    SquareRenderer::new(
+        SquareScale {
+            horizontal: SQUARE_SCALE_HORIZONTAL,
+        },
+        SquareScale {
+            horizontal: SQUARE_SCALE_HORIZONTAL,
         },
         0,
     )

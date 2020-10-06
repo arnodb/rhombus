@@ -1,9 +1,10 @@
 use crate::{
     hex::{
         cellular::world::{FovState, MoveMode, World},
-        new_area_renderer, new_edge_renderer, new_tile_renderer,
+        new_area_renderer, new_edge_renderer, new_square_renderer, new_tile_renderer,
         render::{
-            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
+            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, square::SquareRenderer,
+            tile::TileRenderer,
         },
         shape::cubic_range::CubicRangeShape,
     },
@@ -284,6 +285,12 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
 impl HexCellularBuilder<TileRenderer> {
     pub fn new_tile() -> Self {
         Self::new(new_tile_renderer())
+    }
+}
+
+impl HexCellularBuilder<SquareRenderer> {
+    pub fn new_square() -> Self {
+        Self::new(new_square_renderer())
     }
 }
 

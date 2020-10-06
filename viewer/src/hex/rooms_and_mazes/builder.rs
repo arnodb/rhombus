@@ -1,8 +1,9 @@
 use crate::{
     hex::{
-        new_area_renderer, new_edge_renderer, new_tile_renderer,
+        new_area_renderer, new_edge_renderer, new_square_renderer, new_tile_renderer,
         render::{
-            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, tile::TileRenderer,
+            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, square::SquareRenderer,
+            tile::TileRenderer,
         },
         rooms_and_mazes::world::{
             ConnectState, FovState, MazeState, MoveMode, RemoveDeadEndsState, World,
@@ -196,6 +197,12 @@ impl<R: HexRenderer> SimpleState for HexRoomsAndMazesBuilder<R> {
 impl HexRoomsAndMazesBuilder<TileRenderer> {
     pub fn new_tile() -> Self {
         Self::new(new_tile_renderer())
+    }
+}
+
+impl HexRoomsAndMazesBuilder<SquareRenderer> {
+    pub fn new_square() -> Self {
+        Self::new(new_square_renderer())
     }
 }
 

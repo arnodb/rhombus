@@ -170,7 +170,7 @@ impl SimpleState for RhombusViewer {
                 .build();
         }
         let assets = {
-            let plane_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
+            let square_handle = data.world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
                 loader.load_from_data(
                     Shape::Plane(None)
                         .generate::<(Vec<TexCoord>, Vec<Normal>, Vec<Position>)>(None)
@@ -229,7 +229,7 @@ impl SimpleState for RhombusViewer {
             .collect::<HashMap<_, _>>();
 
             RhombusViewerAssets {
-                plane_handle,
+                square_handle,
                 hex_handle,
                 dodec_handle,
                 pointer_handle,

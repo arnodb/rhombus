@@ -172,7 +172,7 @@ impl HexRenderer for EdgeRenderer {
             self.plane = Some(
                 data.world
                     .create_entity()
-                    .with(world.assets.plane_handle.clone())
+                    .with(world.assets.square_handle.clone())
                     .with(world.assets.color_data[&Color::White].dark.clone())
                     .with(transform)
                     .build(),
