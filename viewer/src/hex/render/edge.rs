@@ -7,6 +7,7 @@ use amethyst::{
     prelude::*,
     renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
 };
+use rhombus_core::hex::coordinates::direction::{HexagonalDirection, NUM_DIRECTIONS};
 use rhombus_core::hex::{coordinates::axial::AxialVector, storage::hash::RectHashStorage};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -183,15 +184,17 @@ impl HexRenderer for EdgeRenderer {
         for (position, mut hex_with_adjacents) in hexes.positions_and_hexes_with_adjacents_mut() {
             let wall = is_wall_hex(position, hex_with_adjacents.hex());
             let visible = is_visible_hex(position, hex_with_adjacents.hex());
-            if force
-                || get_renderer_hex(hex_with_adjacents.hex()).wall != wall
-                || get_renderer_hex(hex_with_adjacents.hex()).visible != visible
-            {
-                for dir in 0..6 {
+            let hex = get_renderer_hex(hex_with_adjacents.hex());
+            if force || hex.wall != wall || hex.visible != visible {
+                hex.wall = wall;
+                hex.visible = visible;
+                for dir in 0..NUM_DIRECTIONS {
                     let hex_edge = if let Some(adjacent) = hex_with_adjacents.adjacent(dir) {
+                        let adjacent_wall = is_wall_hex(position.neighbor(dir), adjacent);
+                        let adjacent_visible = is_visible_hex(position.neighbor(dir), adjacent);
                         let adjacent = get_renderer_hex(adjacent);
-                        let (hex_edge, adjacent_edge) = if adjacent.visible == visible {
-                            match (wall, adjacent.wall) {
+                        let (hex_edge, adjacent_edge) = if adjacent_visible == visible {
+                            match (wall, adjacent_wall) {
                                 (true, true) | (false, false) => {
                                     (Edge::SameAltitude, Edge::SameAltitude)
                                 }
@@ -208,8 +211,6 @@ impl HexRenderer for EdgeRenderer {
                     };
                     get_renderer_hex(hex_with_adjacents.hex()).edges[dir] = hex_edge;
                 }
-                get_renderer_hex(hex_with_adjacents.hex()).wall = wall;
-                get_renderer_hex(hex_with_adjacents.hex()).visible = visible;
                 dirty = true;
             }
         }
