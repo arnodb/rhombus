@@ -12,6 +12,7 @@ pub mod snake;
 pub mod systems;
 pub mod world;
 
+use crate::hex::custom::builder::HexCustomBuilder;
 use crate::{
     assets::{Color, ColorData, RhombusViewerAssets},
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
@@ -79,6 +80,7 @@ const HEX_CUBIC_RANGE_SHAPE: usize = 10;
 const HEX_FLAT_BUILDER: usize = 100;
 const HEX_BUMPY_BUILDER: usize = 101;
 const HEX_CELLULAR_BUILDER: usize = 102;
+const HEX_CUSTOM_BUILDER: usize = 103;
 const HEX_RAM_BUILDER: usize = 200;
 
 enum RhombusViewerAnimation {
@@ -133,6 +135,8 @@ impl RhombusViewer {
             HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
             // Cellular hex builders
             HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new_edge()),
+            // Custom hex builders
+            HEX_CUSTOM_BUILDER => Box::new(HexCustomBuilder::new_debug()),
             // Rooms and mazes hex builder
             HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new_edge()),
             _ => unimplemented!(),
@@ -454,6 +458,8 @@ enum DemoOption {
     HexBumpyBuilder = HEX_BUMPY_BUILDER as isize,
     #[structopt(name = "hex-cellular-builder")]
     HexCellularBuilder = HEX_CELLULAR_BUILDER as isize,
+    #[structopt(name = "hex-custom-builder")]
+    HexCustomBuilder = HEX_CUSTOM_BUILDER as isize,
     #[structopt(name = "hex-ram-builder")]
     HexRamBuilder = HEX_RAM_BUILDER as isize,
 }
