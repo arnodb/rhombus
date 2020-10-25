@@ -545,6 +545,67 @@ impl<R: HexRenderer> World<R> {
         true
     }
 
+    pub fn start_remove_angles(&self) -> RemoveAnglesState {
+        RemoveAnglesState {
+            tests: self
+                .hexes
+                .positions()
+                .filter(|pos| {
+                    let cubic = CubicVector::from(*pos);
+                    ((cubic.x() - self.shape.range_x().start()) % 2 == 1)
+                        && ((cubic.z() - self.shape.range_z().start()) % 2 == 1)
+                })
+                .collect(),
+            next: 0,
+            redo_tests: Vec::new(),
+        }
+    }
+
+    pub fn remove_angles(&mut self, state: &mut RemoveAnglesState) -> bool {
+        loop {
+            while state.next < state.tests.len() {
+                let pos = state.tests[state.next];
+                state.next += 1;
+                let hex = self.hexes.get(pos);
+                if let Some((
+                    HexData {
+                        state: HexState::Open(..),
+                    },
+                    _,
+                )) = hex
+                {
+                } else {
+                    continue;
+                }
+                let mut redo = SmallVec::<[usize; NUM_DIRECTIONS]>::new();
+                for dir in 0..NUM_DIRECTIONS {
+                    let adj = self.hexes.get(pos + AxialVector::direction(dir));
+                    if let Some((
+                        HexData {
+                            state: HexState::Open(..),
+                        },
+                        _,
+                    )) = adj
+                    {
+                        redo.push(dir);
+                    }
+                }
+                if redo.len() == 2 && (redo[0] + 1 == redo[1] || redo[0] == 0 && redo[1] == 5) {
+                    let hex = self.hexes.get_mut(pos);
+                    hex.expect("angle cell").0.state = HexState::Wall;
+                }
+            }
+            if !state.redo_tests.is_empty() {
+                std::mem::swap(&mut state.tests, &mut state.redo_tests);
+                state.redo_tests.clear();
+                state.next = 0;
+            } else {
+                break;
+            }
+        }
+        true
+    }
+
     pub fn clean_walls(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) {
         let mut remove = Vec::new();
         for (pos, haa) in self.hexes.positions_and_hexes_with_adjacents() {
@@ -749,6 +810,13 @@ pub struct ConnectState {
 
 #[derive(Debug)]
 pub struct RemoveDeadEndsState {
+    tests: Vec<AxialVector>,
+    next: usize,
+    redo_tests: Vec<AxialVector>,
+}
+
+#[derive(Debug)]
+pub struct RemoveAnglesState {
     tests: Vec<AxialVector>,
     next: usize,
     redo_tests: Vec<AxialVector>,

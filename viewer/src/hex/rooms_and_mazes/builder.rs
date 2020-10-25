@@ -2,7 +2,8 @@ use crate::{
     hex::{
         render::renderer::HexRenderer,
         rooms_and_mazes::world::{
-            ConnectState, FovState, MazeState, MoveMode, RemoveDeadEndsState, World,
+            ConnectState, FovState, MazeState, MoveMode, RemoveAnglesState, RemoveDeadEndsState,
+            World,
         },
         shape::cubic_range::CubicRangeShape,
     },
@@ -22,6 +23,7 @@ enum BuilderState {
     Maze(MazeState),
     Connect(ConnectState),
     RemoveDeadEnds(RemoveDeadEndsState),
+    RemoveAngles(RemoveAnglesState),
     Grown,
     FieldOfView(bool),
 }
@@ -172,6 +174,11 @@ impl<R: HexRenderer> SimpleState for HexRoomsAndMazesBuilder<R> {
                 }
                 BuilderState::RemoveDeadEnds(state) => {
                     if self.world.remove_dead_ends(state) {
+                        self.state = BuilderState::RemoveAngles(self.world.start_remove_angles());
+                    }
+                }
+                BuilderState::RemoveAngles(state) => {
+                    if self.world.remove_angles(state) {
                         self.world.clean_walls(data);
                         force_update = true;
                         self.state = BuilderState::Grown;
