@@ -1,9 +1,6 @@
-use crate::dispose::Dispose;
-use crate::hex::render::renderer::HexRenderer;
-use crate::world::RhombusViewerWorld;
+use crate::{dispose::Dispose, hex::render::renderer::HexRenderer, world::RhombusViewerWorld};
 use amethyst::prelude::*;
-use rhombus_core::hex::coordinates::axial::AxialVector;
-use rhombus_core::hex::storage::hash::RectHashStorage;
+use rhombus_core::hex::{coordinates::axial::AxialVector, storage::hash::RectHashStorage};
 
 pub struct MultiRenderer<R1, R2> {
     r1: R1,

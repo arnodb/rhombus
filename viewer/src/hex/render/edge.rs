@@ -7,8 +7,13 @@ use amethyst::{
     prelude::*,
     renderer::{debug_drawing::DebugLinesComponent, palette::Srgba},
 };
-use rhombus_core::hex::coordinates::direction::{HexagonalDirection, NUM_DIRECTIONS};
-use rhombus_core::hex::{coordinates::axial::AxialVector, storage::hash::RectHashStorage};
+use rhombus_core::hex::{
+    coordinates::{
+        axial::AxialVector,
+        direction::{HexagonalDirection, NUM_DIRECTIONS},
+    },
+    storage::hash::RectHashStorage,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Edge {

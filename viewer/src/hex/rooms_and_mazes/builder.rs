@@ -1,10 +1,6 @@
 use crate::{
     hex::{
-        new_area_renderer, new_edge_renderer, new_square_renderer, new_tile_renderer,
-        render::{
-            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, square::SquareRenderer,
-            tile::TileRenderer,
-        },
+        render::renderer::HexRenderer,
         rooms_and_mazes::world::{
             ConnectState, FovState, MazeState, MoveMode, RemoveDeadEndsState, World,
         },
@@ -37,7 +33,7 @@ pub struct HexRoomsAndMazesBuilder<R: HexRenderer> {
 }
 
 impl<R: HexRenderer> HexRoomsAndMazesBuilder<R> {
-    fn new(renderer: R) -> Self {
+    pub fn new(renderer: R) -> Self {
         Self {
             world: World::new(renderer),
             remaining_millis: 0,
@@ -191,29 +187,5 @@ impl<R: HexRenderer> SimpleState for HexRoomsAndMazesBuilder<R> {
         }
         self.world.update_renderer_world(force_update, data);
         Trans::None
-    }
-}
-
-impl HexRoomsAndMazesBuilder<TileRenderer> {
-    pub fn new_tile() -> Self {
-        Self::new(new_tile_renderer())
-    }
-}
-
-impl HexRoomsAndMazesBuilder<SquareRenderer> {
-    pub fn new_square() -> Self {
-        Self::new(new_square_renderer())
-    }
-}
-
-impl HexRoomsAndMazesBuilder<EdgeRenderer> {
-    pub fn new_edge() -> Self {
-        Self::new(new_edge_renderer())
-    }
-}
-
-impl HexRoomsAndMazesBuilder<AreaRenderer> {
-    pub fn new_area() -> Self {
-        Self::new(new_area_renderer())
     }
 }

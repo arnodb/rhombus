@@ -1,9 +1,7 @@
-use crate::hex::render::renderer::HexRenderer;
 use crate::{
     hex::{
         custom::world::{FovState, MoveMode, World},
-        new_edge_renderer,
-        render::edge::EdgeRenderer,
+        render::renderer::HexRenderer,
     },
     input::get_key_and_modifiers,
     world::RhombusViewerWorld,
@@ -24,7 +22,7 @@ pub struct HexCustomBuilder<R: HexRenderer> {
 }
 
 impl<R: HexRenderer> HexCustomBuilder<R> {
-    fn new(renderer: R) -> Self {
+    pub fn new(renderer: R) -> Self {
         Self {
             world: World::new(renderer),
             state: CustomState::Grown,
@@ -136,11 +134,5 @@ impl<R: HexRenderer> SimpleState for HexCustomBuilder<R> {
         }
         self.world.update_renderer_world(force_update, data);
         Trans::None
-    }
-}
-
-impl HexCustomBuilder<EdgeRenderer> {
-    pub fn new_debug() -> Self {
-        Self::new(new_edge_renderer())
     }
 }

@@ -1,11 +1,7 @@
 use crate::{
     hex::{
         cellular::world::{FovState, MoveMode, World},
-        new_area_renderer, new_edge_renderer, new_square_renderer, new_tile_renderer,
-        render::{
-            area::AreaRenderer, edge::EdgeRenderer, renderer::HexRenderer, square::SquareRenderer,
-            tile::TileRenderer,
-        },
+        render::renderer::HexRenderer,
         shape::cubic_range::CubicRangeShape,
     },
     input::get_key_and_modifiers,
@@ -34,7 +30,7 @@ pub struct HexCellularBuilder<R: HexRenderer> {
 }
 
 impl<R: HexRenderer> HexCellularBuilder<R> {
-    fn new(renderer: R) -> Self {
+    pub fn new(renderer: R) -> Self {
         Self {
             world: World::new(renderer),
             remaining_millis: 0,
@@ -279,29 +275,5 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
         }
         self.world.update_renderer_world(force_update, data);
         Trans::None
-    }
-}
-
-impl HexCellularBuilder<TileRenderer> {
-    pub fn new_tile() -> Self {
-        Self::new(new_tile_renderer())
-    }
-}
-
-impl HexCellularBuilder<SquareRenderer> {
-    pub fn new_square() -> Self {
-        Self::new(new_square_renderer())
-    }
-}
-
-impl HexCellularBuilder<EdgeRenderer> {
-    pub fn new_edge() -> Self {
-        Self::new(new_edge_renderer())
-    }
-}
-
-impl HexCellularBuilder<AreaRenderer> {
-    pub fn new_area() -> Self {
-        Self::new(new_area_renderer())
     }
 }

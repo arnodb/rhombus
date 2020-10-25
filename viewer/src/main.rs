@@ -12,14 +12,14 @@ pub mod snake;
 pub mod systems;
 pub mod world;
 
-use crate::hex::custom::builder::HexCustomBuilder;
 use crate::{
     assets::{Color, ColorData, RhombusViewerAssets},
     dodec::{directions::DodecDirectionsDemo, snake::DodecSnakeDemo, sphere::DodecSphereDemo},
     hex::{
         bumpy_builder::HexBumpyBuilderDemo, cellular::builder::HexCellularBuilder,
-        cubic_range_shape::HexCubicRangeShapeDemo, directions::HexDirectionsDemo,
-        flat_builder::HexFlatBuilderDemo, ring::HexRingDemo,
+        cubic_range_shape::HexCubicRangeShapeDemo, custom::builder::HexCustomBuilder,
+        directions::HexDirectionsDemo, flat_builder::HexFlatBuilderDemo, new_area_edge_renderer,
+        new_edge_renderer, new_multi_renderer, ring::HexRingDemo,
         rooms_and_mazes::builder::HexRoomsAndMazesBuilder, snake::HexSnakeDemo,
     },
     systems::{
@@ -134,11 +134,14 @@ impl RhombusViewer {
             // Bumpy hex builders
             HEX_BUMPY_BUILDER => Box::new(HexBumpyBuilderDemo::new()),
             // Cellular hex builders
-            HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new_edge()),
+            HEX_CELLULAR_BUILDER => Box::new(HexCellularBuilder::new(new_edge_renderer())),
             // Custom hex builders
-            HEX_CUSTOM_BUILDER => Box::new(HexCustomBuilder::new_debug()),
+            HEX_CUSTOM_BUILDER => Box::new(HexCustomBuilder::new(new_multi_renderer(
+                new_edge_renderer(),
+                new_area_edge_renderer(),
+            ))),
             // Rooms and mazes hex builder
-            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new_edge()),
+            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new(new_edge_renderer())),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
