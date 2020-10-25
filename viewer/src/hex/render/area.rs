@@ -26,8 +26,6 @@ impl HexRenderer for AreaRenderer {
         ()
     }
 
-    fn set_cell_radius(&mut self, _cell_radius: usize) {}
-
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
         hexes: &mut RectHashStorage<StorageHex>,

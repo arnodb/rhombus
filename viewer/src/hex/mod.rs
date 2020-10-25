@@ -34,7 +34,6 @@ pub fn new_tile_renderer() -> TileRenderer {
             horizontal: HEX_SCALE_HORIZONTAL,
             vertical: WALL_HEX_SCALE_VERTICAL,
         },
-        0,
     )
 }
 
@@ -48,7 +47,6 @@ pub fn new_square_renderer() -> SquareRenderer {
         SquareScale {
             horizontal: SQUARE_SCALE_HORIZONTAL,
         },
-        0,
     )
 }
 

@@ -34,30 +34,21 @@ impl Dispose for Hex {
 pub struct TileRenderer {
     ground_scale: HexScale,
     wall_scale: HexScale,
-    cell_radius: usize,
 }
 
 impl TileRenderer {
-    pub fn new(ground_scale: HexScale, wall_scale: HexScale, cell_radius: usize) -> Self {
+    pub fn new(ground_scale: HexScale, wall_scale: HexScale) -> Self {
         Self {
             ground_scale,
             wall_scale,
-            cell_radius,
         }
     }
 
-    fn get_scale(&self, wall: bool, cell_radius: usize) -> HexScale {
-        let mut scale = if wall {
+    fn get_scale(&self, wall: bool) -> HexScale {
+        if wall {
             self.wall_scale
         } else {
             self.ground_scale
-        };
-        if cell_radius > 1 {
-            let scale_factor = (2.0 * cell_radius as f32).max(1.0);
-            scale.horizontal *= scale_factor;
-            scale
-        } else {
-            scale
         }
     }
 
@@ -105,7 +96,7 @@ impl TileRenderer {
         data: &mut StateData<'_, GameData<'_, '_>>,
         world: &RhombusViewerWorld,
     ) {
-        let scale = self.get_scale(hex.wall, self.cell_radius);
+        let scale = self.get_scale(hex.wall);
         let material = self.get_material(hex.wall, hex.visible, world);
         if let Some(entity) = hex.entity {
             Self::update_hex_transform(entity, scale, &mut data.world.write_storage::<Transform>());
@@ -186,10 +177,6 @@ impl HexRenderer for TileRenderer {
         }
     }
 
-    fn set_cell_radius(&mut self, cell_radius: usize) {
-        self.cell_radius = cell_radius;
-    }
-
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
         hexes: &mut RectHashStorage<StorageHex>,
@@ -206,8 +193,8 @@ impl HexRenderer for TileRenderer {
         Wall: Fn(AxialVector, &StorageHex) -> bool,
         Visible: Fn(AxialVector, &StorageHex) -> bool,
     {
-        let ground_scale = self.get_scale(false, self.cell_radius);
-        let wall_scale = self.get_scale(true, self.cell_radius);
+        let ground_scale = self.get_scale(false);
+        let wall_scale = self.get_scale(true);
         {
             let mut transform_storage = data.world.write_storage::<Transform>();
             let mut material_storage = data.world.write_storage::<Handle<Material>>();

@@ -27,11 +27,6 @@ where
         )
     }
 
-    fn set_cell_radius(&mut self, cell_radius: usize) {
-        self.r1.set_cell_radius(cell_radius);
-        self.r2.set_cell_radius(cell_radius);
-    }
-
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
         hexes: &mut RectHashStorage<StorageHex>,

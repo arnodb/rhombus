@@ -54,7 +54,6 @@ impl HexCubicRangeShapeDemo {
                 horizontal: 0.8,
                 vertical: 0.3,
             },
-            0,
         );
         let pointer = HexPointer::new_with_level_height(1.0);
         Self {

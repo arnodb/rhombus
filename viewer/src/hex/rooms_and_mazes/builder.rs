@@ -61,6 +61,7 @@ impl<R: HexRenderer> SimpleState for HexRoomsAndMazesBuilder<R> {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         world.set_camera_distance(&data, 300.0);
         self.reset(&mut data);
+        self.world.update_renderer_world(true, &mut data);
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {

@@ -60,6 +60,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
         let world = (*data.world.read_resource::<Arc<RhombusViewerWorld>>()).clone();
         world.set_camera_distance(&data, 300.0);
         self.reset(&mut data);
+        self.world.update_renderer_world(true, &mut data);
     }
 
     fn on_stop(&mut self, mut data: StateData<'_, GameData<'_, '_>>) {
@@ -242,7 +243,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
             match self.state {
                 CellularState::GrowingPhase1 => {
                     self.world.cellular_automaton_phase1_step1();
-                    let frozen = self.world.cellular_automaton_step2(
+                    let frozen = self.world.cellular_automaton_phase1_step2(
                         |count| count >= 5 && count <= 6,
                         |count| count >= 3 && count <= 6,
                     );
@@ -254,7 +255,7 @@ impl<R: HexRenderer> SimpleState for HexCellularBuilder<R> {
                 }
                 CellularState::GrowingPhase2(countdown) => {
                     self.world.cellular_automaton_phase2_step1();
-                    self.world.cellular_automaton_step2(
+                    self.world.cellular_automaton_phase2_step2(
                         |count| count >= 3 && count <= 6,
                         |count| count >= 3 && count <= 6,
                     );

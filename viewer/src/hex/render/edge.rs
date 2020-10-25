@@ -35,7 +35,6 @@ impl Dispose for Hex {
 }
 
 pub struct EdgeRenderer {
-    cell_radius: usize,
     plane: Option<Entity>,
     entity: Option<Entity>,
     previous_visible_only: bool,
@@ -44,7 +43,6 @@ pub struct EdgeRenderer {
 impl EdgeRenderer {
     pub fn new() -> Self {
         Self {
-            cell_radius: 1,
             plane: None,
             entity: None,
             previous_visible_only: false,
@@ -93,11 +91,6 @@ impl EdgeRenderer {
         StorageHex: Dispose,
         MapHex: Fn(&mut StorageHex) -> &mut <Self as HexRenderer>::Hex,
     {
-        let scale_factor = if self.cell_radius > 1 {
-            (1.6 * self.cell_radius as f32).max(1.0)
-        } else {
-            1.0
-        };
         for (position, hex) in hexes.iter_mut() {
             let hex = get_renderer_hex(hex);
             if visible_only && !hex.visible {
@@ -119,15 +112,15 @@ impl EdgeRenderer {
                     if let Some(color) = Self::get_color(hex, hex.edges[*dir]) {
                         debug_lines.add_line(
                             [
-                                translation[0] + vertices[0].0 * scale_factor,
+                                translation[0] + vertices[0].0,
                                 translation[1] + if hex.wall { 1.0 } else { 0.0 },
-                                translation[2] + vertices[0].1 * scale_factor,
+                                translation[2] + vertices[0].1,
                             ]
                             .into(),
                             [
-                                translation[0] + vertices[1].0 * scale_factor,
+                                translation[0] + vertices[1].0,
                                 translation[1] + if hex.wall { 1.0 } else { 0.0 },
-                                translation[2] + vertices[1].1 * scale_factor,
+                                translation[2] + vertices[1].1,
                             ]
                             .into(),
                             color,
@@ -148,10 +141,6 @@ impl HexRenderer for EdgeRenderer {
             visible,
             edges: [Edge::Void; 6],
         }
-    }
-
-    fn set_cell_radius(&mut self, cell_radius: usize) {
-        self.cell_radius = cell_radius;
     }
 
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(

@@ -86,6 +86,26 @@ impl<R: HexRenderer> World<R> {
         self.reset_world(cell_radius_ratio_den, wall_ratio, data);
     }
 
+    fn for_each_big_cell<F>(center: AxialVector, cell_radius: usize, mut f: F)
+    where
+        F: FnMut(AxialVector) -> bool,
+    {
+        let mut r = 0;
+        loop {
+            let mut end = true;
+            for pos in center.big_ring_iter(cell_radius, r) {
+                let keep_going = f(pos);
+                if keep_going {
+                    end = false;
+                }
+            }
+            if end {
+                break;
+            }
+            r += 1;
+        }
+    }
+
     pub fn reset_world(
         &mut self,
         cell_radius_ratio_den: usize,
@@ -107,7 +127,6 @@ impl<R: HexRenderer> World<R> {
         }
 
         self.cell_radius = Self::compute_cell_radius(&self.shape, cell_radius_ratio_den);
-        self.renderer.set_cell_radius(self.cell_radius);
         let mut rng = thread_rng();
         let internal_ranges: [Range; 3] = [
             (
@@ -126,46 +145,55 @@ impl<R: HexRenderer> World<R> {
             )
                 .into(),
         ];
-        let mut r = 0;
-        loop {
-            let mut end = true;
-            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
-                if !pos
-                    .ring_iter(self.cell_radius)
-                    .any(|v| self.shape.contains_position(v))
-                {
-                    continue;
-                }
-                end = false;
-                let cubic = CubicVector::from(pos);
-                let state = if internal_ranges[0].contains(cubic.x())
-                    && internal_ranges[1].contains(cubic.y())
-                    && internal_ranges[2].contains(cubic.z())
-                {
-                    if ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio {
-                        HexState::Wall
-                    } else {
-                        HexState::Open
-                    }
+        Self::for_each_big_cell(self.shape.center(), self.cell_radius, |pos| -> bool {
+            if !pos
+                .ring_iter(self.cell_radius)
+                .any(|v| self.shape.contains_position(v))
+            {
+                return false;
+            }
+            let cubic = CubicVector::from(pos);
+            let state = if internal_ranges[0].contains(cubic.x())
+                && internal_ranges[1].contains(cubic.y())
+                && internal_ranges[2].contains(cubic.z())
+            {
+                if ((rng.next_u32() & 0xffff) as f32 / 0x1_0000 as f32) < wall_ratio {
+                    HexState::Wall
                 } else {
-                    HexState::HardWall
-                };
-                self.hexes.insert(
-                    pos,
-                    (
-                        HexData {
-                            state,
-                            automaton_count: 0,
-                        },
-                        self.renderer.new_hex(state != HexState::Open, true),
-                    ),
-                );
+                    HexState::Open
+                }
+            } else {
+                HexState::HardWall
+            };
+            self.hexes.insert(
+                pos,
+                (
+                    HexData {
+                        state,
+                        automaton_count: 0,
+                    },
+                    self.renderer.new_hex(state != HexState::Open, true),
+                ),
+            );
+            for s in 1..=self.cell_radius {
+                for sub_pos in pos.ring_iter(s) {
+                    if self.shape.contains_position(sub_pos) {
+                        self.hexes.insert(
+                            sub_pos,
+                            (
+                                HexData {
+                                    state,
+                                    automaton_count: 0,
+                                },
+                                self.renderer.new_hex(state != HexState::Open, true),
+                            ),
+                        );
+                    }
+                }
             }
-            if end {
-                break;
-            }
-            r += 1;
-        }
+            true
+        });
+        self.renderer_dirty = true;
     }
 
     pub fn try_resize_shape(
@@ -233,39 +261,44 @@ impl<R: HexRenderer> World<R> {
     }
 
     pub fn cellular_automaton_phase1_step1(&mut self) {
-        for (hex_data, _) in self.hexes.hexes_mut() {
-            hex_data.automaton_count = 0;
-        }
-        let mut r = 0;
-        loop {
-            let mut end = true;
-            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
-                if let Some((
-                    HexData {
-                        state: hex_state, ..
-                    },
-                    _,
-                )) = self.hexes.get(pos)
-                {
-                    let is_wall = match hex_state {
-                        HexState::Wall | HexState::HardWall => true,
-                        HexState::Open => false,
-                    };
-                    if is_wall {
-                        for neighbor in pos.big_ring_iter(self.cell_radius, 1) {
-                            if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
-                                hex_data.automaton_count += 1;
-                            }
+        Self::for_each_big_cell(self.shape.center(), self.cell_radius, |pos| -> bool {
+            if let Some((
+                HexData {
+                    automaton_count, ..
+                },
+                _,
+            )) = self.hexes.get_mut(pos)
+            {
+                *automaton_count = 0;
+                true
+            } else {
+                false
+            }
+        });
+        Self::for_each_big_cell(self.shape.center(), self.cell_radius, |pos| -> bool {
+            if let Some((
+                HexData {
+                    state: hex_state, ..
+                },
+                _,
+            )) = self.hexes.get(pos)
+            {
+                let is_wall = match hex_state {
+                    HexState::Wall | HexState::HardWall => true,
+                    HexState::Open => false,
+                };
+                if is_wall {
+                    for neighbor in pos.big_ring_iter(self.cell_radius, 1) {
+                        if let Some((hex_data, _)) = self.hexes.get_mut(neighbor) {
+                            hex_data.automaton_count += 1;
                         }
                     }
-                    end = false;
                 }
+                true
+            } else {
+                false
             }
-            if end {
-                break;
-            }
-            r += 1;
-        }
+        });
     }
 
     pub fn cellular_automaton_phase2_step1(&mut self) {
@@ -289,7 +322,65 @@ impl<R: HexRenderer> World<R> {
         }
     }
 
-    pub fn cellular_automaton_step2<RaiseF, RemainF>(
+    fn cellular_automaton_step2_internal<RaiseF, RemainF>(
+        hex_data: &mut HexData,
+        raise_wall_test: RaiseF,
+        remain_wall_test: RemainF,
+    ) -> bool
+    where
+        RaiseF: Fn(u8) -> bool,
+        RemainF: Fn(u8) -> bool,
+    {
+        let mut frozen = true;
+        match hex_data.state {
+            HexState::Wall => {
+                if !remain_wall_test(hex_data.automaton_count) {
+                    hex_data.state = HexState::Open;
+                    frozen = false;
+                }
+            }
+            HexState::Open => {
+                if raise_wall_test(hex_data.automaton_count) {
+                    hex_data.state = HexState::Wall;
+                    frozen = false;
+                }
+            }
+            HexState::HardWall => {}
+        }
+        frozen
+    }
+
+    pub fn cellular_automaton_phase1_step2<RaiseF, RemainF>(
+        &mut self,
+        raise_wall_test: RaiseF,
+        remain_wall_test: RemainF,
+    ) -> bool
+    where
+        RaiseF: Fn(u8) -> bool,
+        RemainF: Fn(u8) -> bool,
+    {
+        let mut frozen = true;
+        Self::for_each_big_cell(self.shape.center(), self.cell_radius, |pos| -> bool {
+            if let Some((hex_data, _)) = self.hexes.get_mut(pos) {
+                if !Self::cellular_automaton_step2_internal(
+                    hex_data,
+                    &raise_wall_test,
+                    &remain_wall_test,
+                ) {
+                    frozen = false;
+                }
+                true
+            } else {
+                false
+            }
+        });
+        if !frozen {
+            self.renderer_dirty = true;
+        }
+        frozen
+    }
+
+    pub fn cellular_automaton_phase2_step2<RaiseF, RemainF>(
         &mut self,
         raise_wall_test: RaiseF,
         remain_wall_test: RemainF,
@@ -300,20 +391,12 @@ impl<R: HexRenderer> World<R> {
     {
         let mut frozen = true;
         for (hex_data, _) in self.hexes.hexes_mut() {
-            match hex_data.state {
-                HexState::Wall => {
-                    if !remain_wall_test(hex_data.automaton_count) {
-                        hex_data.state = HexState::Open;
-                        frozen = false;
-                    }
-                }
-                HexState::Open => {
-                    if raise_wall_test(hex_data.automaton_count) {
-                        hex_data.state = HexState::Wall;
-                        frozen = false;
-                    }
-                }
-                HexState::HardWall => {}
+            if !Self::cellular_automaton_step2_internal(
+                hex_data,
+                &raise_wall_test,
+                &remain_wall_test,
+            ) {
+                frozen = false;
             }
         }
         if !frozen {
@@ -326,50 +409,37 @@ impl<R: HexRenderer> World<R> {
         if self.cell_radius <= 0 {
             return;
         }
-        self.renderer.set_cell_radius(0);
-        let mut r = 0;
-        loop {
-            let mut end = true;
-            for pos in self.shape.center().big_ring_iter(self.cell_radius, r) {
-                if let Some((
-                    HexData {
-                        state: hex_state, ..
-                    },
-                    _,
-                )) = self.hexes.get(pos)
-                {
-                    let hex_state = *hex_state;
-                    let wall = match hex_state {
-                        HexState::Wall | HexState::HardWall => true,
-                        HexState::Open => false,
-                    };
-                    if !self.shape.contains_position(pos) {
-                        self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
-                    }
-                    for s in 1..=self.cell_radius {
-                        for sub_pos in pos.ring_iter(s) {
-                            if self.shape.contains_position(sub_pos) {
-                                self.hexes.insert(
-                                    sub_pos,
-                                    (
-                                        HexData {
-                                            state: hex_state,
-                                            automaton_count: 0,
-                                        },
-                                        self.renderer.new_hex(wall, true),
-                                    ),
-                                );
-                            }
+        Self::for_each_big_cell(self.shape.center(), self.cell_radius, |pos| -> bool {
+            if let Some((
+                HexData {
+                    state: hex_state, ..
+                },
+                _,
+            )) = self.hexes.get(pos)
+            {
+                let hex_state = *hex_state;
+                if !self.shape.contains_position(pos) {
+                    self.hexes.remove(pos).map(|mut hex| hex.dispose(data));
+                }
+                for s in 1..=self.cell_radius {
+                    for sub_pos in pos.ring_iter(s) {
+                        if self.shape.contains_position(sub_pos) {
+                            let hex = self
+                                .hexes
+                                .get_mut(sub_pos)
+                                .expect("The entire shape is paved with tiles");
+                            hex.0 = HexData {
+                                state: hex_state,
+                                automaton_count: 0,
+                            };
                         }
                     }
-                    end = false;
                 }
+                true
+            } else {
+                false
             }
-            if end {
-                break;
-            }
-            r += 1;
-        }
+        });
         self.renderer_dirty = true;
     }
 

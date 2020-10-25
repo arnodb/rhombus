@@ -7,8 +7,6 @@ pub trait HexRenderer {
 
     fn new_hex(&mut self, wall: bool, visible: bool) -> Self::Hex;
 
-    fn set_cell_radius(&mut self, cell_radius: usize);
-
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(
         &mut self,
         hexes: &mut RectHashStorage<StorageHex>,

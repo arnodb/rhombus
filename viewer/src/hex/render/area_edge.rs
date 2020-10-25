@@ -36,7 +36,6 @@ impl Dispose for Hex {
 }
 
 pub struct AreaEdgeRenderer {
-    cell_radius: usize,
     plane: Option<Entity>,
     entity: Option<Entity>,
     previous_visible_only: bool,
@@ -45,7 +44,6 @@ pub struct AreaEdgeRenderer {
 impl AreaEdgeRenderer {
     pub fn new() -> Self {
         Self {
-            cell_radius: 1,
             plane: None,
             entity: None,
             previous_visible_only: false,
@@ -268,10 +266,6 @@ impl HexRenderer for AreaEdgeRenderer {
             visible,
             edges: [Edge::Void; 6],
         }
-    }
-
-    fn set_cell_radius(&mut self, cell_radius: usize) {
-        self.cell_radius = cell_radius;
     }
 
     fn update_world<'a, StorageHex, MapHex, Wall, Visible>(

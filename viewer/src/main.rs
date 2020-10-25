@@ -141,7 +141,7 @@ impl RhombusViewer {
                 new_area_edge_renderer(),
             ))),
             // Rooms and mazes hex builder
-            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new(new_edge_renderer())),
+            HEX_RAM_BUILDER => Box::new(HexRoomsAndMazesBuilder::new(new_area_edge_renderer())),
             _ => unimplemented!(),
         };
         Trans::Push(new_state)
